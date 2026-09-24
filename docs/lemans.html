@@ -1273,6 +1273,28 @@ pd_ignore_unused</pre>
       </p>
       <p style="font-size:12px; color:var(--muted)">Boots the <strong>on-disk Yocto rootfs</strong> with your own kernel — unlike <code>make efi</code>, which boots the Buildroot initramfs. The matching Yocto <code>rootfs.img</code> must already be flashed (<code>make flash-yocto</code>).</p>
     </div>
+    <div class="card" style="border-color:var(--accent)">
+      <h3 style="color:var(--accent)">make flash-sail</h3>
+      <p style="margin-bottom:8px; line-height:1.6">
+        Programs the <strong style="color:var(--text)">SAIL safety-island NOR image</strong>.
+        SAIL boots from its own NOR flash, wholly independent of the UFS boot chain that
+        <code>flash-loader</code> / <code>flash-kernel</code> program. Runs a
+        <strong style="color:var(--text)">self-contained stock blob set</strong> (its own firehose,
+        <code>rawprogram0.xml</code> / <code>patch0.xml</code>, payload ELFs) straight from
+        <code>lemans/blobs/</code> — no local build artifacts, no staging into <code>lemans/output/</code>.
+      </p>
+      <p style="font-size:12px; color:var(--muted)">Independent of the UFS boot chain. Device must be in EDL mode; needs the fetched blob set (<code>make fetch-blobs</code>).</p>
+    </div>
+    <div class="card" style="border-color:var(--red)">
+      <h3 style="color:var(--red)">make flash-sail-wipe</h3>
+      <p style="margin-bottom:8px; line-height:1.6">
+        <strong style="color:var(--red)">Recovery only.</strong> Zeroes the MBR + primary/backup GPT
+        sectors on <strong style="color:var(--text)">every SAIL NOR physical partition</strong>,
+        invalidating the on-NOR layout. Use to recover a NOR left inconsistent by a bad flash, then
+        re-run <code>make flash-sail</code>.
+      </p>
+      <p style="font-size:12px; color:var(--muted)"><strong style="color:var(--red)">WARNING:</strong> destroys the SAIL NOR layout and all data on it. Device must be in EDL mode.</p>
+    </div>
   </div>
   <div class="card" style="max-width:860px; margin-top:16px">
     <h3>Flash Artifacts — Source</h3>
