@@ -40,6 +40,8 @@
 #   flash-yocto    Flash the complete unmodified Yocto release image (all 6 LUNs)
 #   flash-loader   Flash the boot chain via QDL (stock FW from fetched blobs; tz/uefi from build)
 #   flash-kernel   Flash the updated efi.bin via QDL  (efi.bin from build; LUN0 tables from blobs)
+#   flash-sail     Flash the SAIL safety-island NOR image via QDL (stock blobs, self-contained)
+#   flash-sail-wipe      Wipe the SAIL NOR partition tables (recovery; destroys SAIL NOR layout)
 #   flash-ufs-provision  Re-provision the UFS LUN layout (recover partitions broken by a bad flash)
 #   edl-package    Assemble flat image dir for Windows EDL flashing (PCATApp/QFIL)
 #   edl-bootloader Assemble bootloader-only EDL package (LUN1–4, fast re-flash)
@@ -306,6 +308,12 @@ help:
 	@echo "════════════════════════════════════════════════════════════════════════"
 	@echo " OTHER FLASH / EDL TARGETS"
 	@echo "════════════════════════════════════════════════════════════════════════"
+	@echo "  flash-sail     Flash the SAIL safety-island NOR image via QDL (needs EDL mode)"
+	@echo "                 Self-contained stock blob set from lemans/blobs (fetch-blobs)"
+	@echo "                 No local build artifacts; independent of the UFS boot chain"
+	@echo "  flash-sail-wipe  Wipe the SAIL NOR partition tables — RECOVERY ONLY (needs EDL mode)"
+	@echo "                 Zeroes MBR + GPTs on every SAIL NOR physical partition"
+	@echo "                 WARNING: destroys the SAIL NOR layout; re-run flash-sail afterward"
 	@echo "  flash-ufs-provision  Re-provision the UFS LUN layout — RECOVERY ONLY"
 	@echo "                 Use only when a firmware upgrade gone wrong broke the partitions"
 	@echo "                 so a normal flash no longer works. Device must be in EDL mode."
@@ -828,6 +836,19 @@ BLOBS_DIR      = $(CURDIR)/lemans/blobs
 # fetch-blobs (and anything depending on it, e.g. flash-loader) re-fetches the
 # new drop instead of no-op'ing on a stale stamp.
 BLOBS_STAMP    = $(BLOBS_DIR)/.fetch-complete-$(BLOBS_VERSION)
+# SAIL (safety-island) NOR flash set — a self-contained sub-tree of the boot-
+# binaries drop (own firehose, rawprogram0/patch0, and payload ELFs). Consumed
+# by flash-sail; flashed in place, no staging into lemans/output/.
+SAIL_NOR_DIR   = $(BLOBS_DIR)/bootbinaries/QCS9100_bootbinaries/sail_nor
+# Per-physical-partition GPT/table wipe descriptors consumed by flash-sail-wipe.
+# One per NOR physical partition (PHY3 has no descriptor); each zeroes the MBR +
+# primary/backup GPT sectors of its partition. (rawprogram0_WIPE_PARTITIONS.xml
+# is intentionally not used: it references a mis-cased "zeros_33sectorS.bin" that
+# does not exist, so it is broken as shipped.)
+SAIL_WIPE_XMLS = wipe_rawprogram_PHY0.xml wipe_rawprogram_PHY1.xml \
+                 wipe_rawprogram_PHY2.xml wipe_rawprogram_PHY4.xml \
+                 wipe_rawprogram_PHY5.xml wipe_rawprogram_PHY6.xml \
+                 wipe_rawprogram_PHY7.xml
 
 ################################################################################
 # Reusable recipe macros (flash / EDL packaging)
@@ -944,7 +965,7 @@ KERNEL_BLOB_FILES = \
 #
 #   flash-kernel   Programs LUN 0 (efi.bin only; rootfs.img is stripped out).
 ################################################################################
-.PHONY: flash-loader flash-kernel
+.PHONY: flash-loader flash-kernel flash-sail flash-sail-wipe
 
 # LOADER_BLOB_FILES (defined above) is staged straight from the fetched blob set
 # (lemans/blobs/, produced by fetch-blobs). NOT included: tz.mbn + uefi.elf
@@ -1016,6 +1037,58 @@ flash-kernel: $(BLOBS_STAMP)
 	fi
 	cd $(CURDIR)/lemans/output && \
 		qdl --debug prog_firehose_ddr.elf rawprogram0-only-kernel.xml patch0.xml
+
+################################################################################
+# flash-sail — Flash the SAIL (safety-island) NOR image.
+#
+# The SAIL subsystem boots from its own NOR flash, wholly independent of the UFS
+# boot chain that flash-loader/flash-kernel program. $(SAIL_NOR_DIR) is a
+# self-contained flash set inside the fetched blob drop: its own DDR firehose
+# programmer, rawprogram0.xml, patch0.xml, and payload ELFs (sailhyp.elf,
+# sailsw1.elf, GPT bins). Nothing here comes from the local build, so — unlike
+# flash-loader/flash-kernel — there is no staging into lemans/output/; qdl runs
+# straight from the blob directory, exactly as flash-yocto does.
+#
+# Depends on $(BLOBS_STAMP) so the set is fetched and, being version-keyed,
+# refreshed on a BLOBS_VERSION bump. Device must be in EDL mode.
+flash-sail: $(BLOBS_STAMP)
+	@if [ ! -f "$(SAIL_NOR_DIR)/prog_firehose_ddr.elf" ]; then \
+		echo "ERROR: SAIL NOR blob set not found at $(SAIL_NOR_DIR)"; \
+		echo "       Run 'make fetch-blobs' (or 'make fetch-blobs-clean fetch-blobs' to force a refresh)"; \
+		exit 1; \
+	fi
+	cd $(SAIL_NOR_DIR) && \
+		qdl --debug prog_firehose_ddr.elf rawprogram0.xml patch0.xml
+
+################################################################################
+# flash-sail-wipe — Wipe the SAIL NOR partition tables (recovery).
+#
+# Zeroes the MBR + primary/backup GPT sectors of every SAIL NOR physical
+# partition ($(SAIL_WIPE_XMLS)), invalidating the whole on-NOR layout. Use to
+# recover a SAIL NOR whose partition tables were left inconsistent by a bad
+# flash, before re-running 'make flash-sail'. Device must be in EDL mode.
+#
+# WARNING: destroys the SAIL NOR partition layout and all data on it.
+#
+# The wipe descriptors reference zeros_5sectors.bin (present here) and
+# zeros_33sectors.bin (NOT shipped in sail_nor — it lives in lemans/blobs/), so
+# qdl is given --include $(BLOBS_DIR) to resolve the latter without copying it
+# into the vendor tree. rawprogram0_WIPE_PARTITIONS.xml is deliberately avoided
+# (broken "zeros_33sectorS.bin" reference — see SAIL_WIPE_XMLS).
+flash-sail-wipe: $(BLOBS_STAMP)
+	@if [ ! -f "$(SAIL_NOR_DIR)/prog_firehose_ddr.elf" ]; then \
+		echo "ERROR: SAIL NOR blob set not found at $(SAIL_NOR_DIR)"; \
+		echo "       Run 'make fetch-blobs' (or 'make fetch-blobs-clean fetch-blobs' to force a refresh)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(BLOBS_DIR)/zeros_33sectors.bin" ]; then \
+		echo "ERROR: zeros_33sectors.bin not found in $(BLOBS_DIR)"; \
+		echo "       Run 'make fetch-blobs' (or 'make fetch-blobs-clean fetch-blobs' to force a refresh)"; \
+		exit 1; \
+	fi
+	cd $(SAIL_NOR_DIR) && \
+		qdl --debug --include . --include $(BLOBS_DIR) \
+		    prog_firehose_ddr.elf $(SAIL_WIPE_XMLS)
 
 ################################################################################
 # flash-ufs-provision — Re-provision the UFS LUN layout (recover a broken UFS)
