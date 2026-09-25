@@ -1,0 +1,51 @@
+#!/bin/sh
+# FastRPC daemons for the Monaco DSPs, as the meta-qcom fastrpc units run
+# them: cdsprpcd, adsprpcd, adsprpcd audiopd and gdsprpcd for gdsp0. Monaco
+# has no CDSP1, SDSP or GPDSP1.
+#
+# A /dev/fastrpc-* node appears only once its DSP has booted and opened the
+# GLINK fastrpc channel, well after init runs, so each daemon waits for its
+# node, up to FASTRPC_NODE_TIMEOUT seconds from the start, in the background.
+
+FASTRPC_NODE_TIMEOUT=${FASTRPC_NODE_TIMEOUT:-60}
+
+# wait_start <node> <daemon> [args...]: start the daemon once <node> or
+# <node>-secure exists.
+wait_start() {
+	node=$1
+	shift
+	while [ ! -e $node ] && [ ! -e $node-secure ]; do
+		if [ $(date +%s) -ge $deadline ]; then
+			echo "fastrpc: no $node after ${FASTRPC_NODE_TIMEOUT}s, not starting $*"
+			return
+		fi
+		sleep 1
+	done
+	echo "Starting $*"
+	"$@" &
+}
+
+start_all() {
+	deadline=$(($(date +%s) + FASTRPC_NODE_TIMEOUT))
+	wait_start /dev/fastrpc-cdsp cdsprpcd
+	wait_start /dev/fastrpc-adsp adsprpcd
+	wait_start /dev/fastrpc-adsp adsprpcd audiopd
+	wait_start /dev/fastrpc-gdsp0 gdsprpcd rootpd gdsp0
+}
+
+case "$1" in
+start)
+	start_all &
+	;;
+stop)
+	kill $(pidof adsprpcd cdsprpcd gdsprpcd) 2>/dev/null
+	;;
+restart)
+	"$0" stop
+	"$0" start
+	;;
+*)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+	;;
+esac
