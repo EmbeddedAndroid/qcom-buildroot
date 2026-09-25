@@ -584,8 +584,8 @@
       <ul>
         <li><span><code style="color:var(--green)">lemans/input/</code> — pre-built blobs &amp; flash support</span></li>
         <li><span><code style="color:var(--green)">lemans/output/</code> — generated artifacts</span></li>
-        <li><span><code style="color:var(--purple)">lemans/security/</code> — SWIV annotation tool (local qtestsign signing)</span></li>
-        <li><span><code style="color:var(--yellow)">lemans/ukify/</code> — EFI stub for UKI</span></li>
+        <li><span><code style="color:var(--purple)">qcom/security/</code>: SWIV annotation tool, shared by the boards (local qtestsign signing)</span></li>
+        <li><span><code style="color:var(--yellow)">qcom/ukify/</code>: EFI stub for the UKI, shared by the boards</span></li>
         <li><span><code style="color:var(--yellow)">br-ext/</code> — external Buildroot package tree</span></li>
       </ul>
     </div>
@@ -806,7 +806,7 @@
         <li>SPL ELF: <span>u-boot/.output/spl/u-boot-spl.elf</span></li>
         <li>TF-A BL31: <span>arm-trusted-firmware/build/lemans_evk/release/bl31/bl31.elf</span></li>
         <li>OP-TEE: <span>tee.elf (embedded in SPL FIT image at build time)</span></li>
-        <li>SWIV tool: <span>lemans/security/swiv_build_utility.py</span></li>
+        <li>SWIV tool: <span>qcom/security/swiv_build_utility.py</span></li>
         <li>Signing: <span><a href="https://github.com/msm8916-mainline/qtestsign" style="color:var(--accent)">msm8916-mainline/qtestsign</a></span></li>
       </ul>
     </div>
@@ -824,7 +824,7 @@
     <div>
       <div class="col-head">Stage 1 — SWIV Annotation</div>
       <div class="card">
-        <pre style="font-size:11px; padding:8px 12px"><span class="fn">python3</span> lemans/security/swiv_build_utility.py \
+        <pre style="font-size:11px; padding:8px 12px"><span class="fn">python3</span> qcom/security/swiv_build_utility.py \
   u-boot/.output/spl/<span class="val">u-boot-spl-swiv.elf</span> \
   u-boot/.output/spl/<span class="val">u-boot-spl.elf</span> \
   <span class="str">lemans</span>
@@ -1123,9 +1123,10 @@ pd_ignore_unused</pre>
           The kernel is built <code style="color:var(--accent)">CONFIG_MODULES=n</code>
           (all drivers are built-in, so the PAS remoteprocs can probe without
           waiting on late-loaded modules) — there are no <code>.ko</code> files.
-          Buildroot's only root overlay is the DSP/remoteproc firmware staged
-          into <code style="color:var(--accent)">lemans/overlay/</code>, so it
-          lands in <code>/lib/firmware</code> inside the initramfs.
+          Buildroot's root overlays are <code style="color:var(--accent)">qcom/overlay/</code>
+          (the qrtr-ns and tqftpserv init scripts shared by the boards) and
+          <code style="color:var(--accent)">lemans/overlay/</code>, where the DSP/remoteproc
+          firmware is staged, so it lands in <code>/lib/firmware</code> inside the initramfs.
         </p>
       </div>
     </div>
@@ -1175,7 +1176,7 @@ pd_ignore_unused</pre>
           <tbody>
             <tr>
               <td style="color:var(--muted); border-bottom:none; padding:4px 12px 4px 0; white-space:nowrap">EFI stub</td>
-              <td style="border-bottom:none; padding:4px 0"><code style="color:var(--muted)">lemans/ukify/linuxaa64.efi.stub</code></td>
+              <td style="border-bottom:none; padding:4px 0"><code style="color:var(--muted)">qcom/ukify/linuxaa64.efi.stub</code></td>
             </tr>
             <tr>
               <td style="color:var(--muted); border-bottom:none; padding:4px 12px 4px 0">Kernel</td>
