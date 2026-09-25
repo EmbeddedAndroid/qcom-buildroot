@@ -16,6 +16,8 @@
     { id: 'quick',     file: 'quick-start.html',    title: 'IQ-9075 EVK Quick Start', subtitle: 'init · sync · build · flash',     group: 'IQ-9075 EVK (Lemans)' },
     { id: 'focused',   file: 'lemans-focused.html', title: 'Lemans: Focused',       subtitle: 'Platform · Boot · Projects',        group: 'IQ-9075 EVK (Lemans)' },
     { id: 'full',      file: 'lemans.html',         title: 'Lemans: Comprehensive', subtitle: 'Build System Deep Dive',            group: 'IQ-9075 EVK (Lemans)' },
+    { id: 'ventuno',   file: 'ventuno-q.html',      title: 'Arduino VENTUNO Q',     subtitle: 'Boot chain · build · sign · flash', group: 'Arduino VENTUNO Q (Monaco)' },
+    { id: 'ventuno-qs', file: 'quick-start-ventuno-q.html', title: 'VENTUNO Q Quick Start', subtitle: 'init · sync · build · sign · flash', group: 'Arduino VENTUNO Q (Monaco)' },
   ];
 
   function basename(path) {

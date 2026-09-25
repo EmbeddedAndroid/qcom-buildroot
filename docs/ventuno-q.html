@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arduino VENTUNO Q · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="ventuno-q">
+<main class="rtd-doc">
+
+  <h1 id="ventuno-q">Arduino VENTUNO Q</h1>
+  <p>
+    The Arduino VENTUNO Q is built around the Qualcomm QCS8275 (Monaco) SoC, also
+    marketed as Dragonwing IQ-8275, and boots from eMMC. <code>monaco.mk</code>
+    builds its open boot chain from TF-A and OP-TEE, which support Monaco as a SoC
+    of its own next to Lemans, and U-Boot, plus a Linux kernel with a Buildroot
+    initramfs. The <a href="quick-start-ventuno-q.html">quick start</a> goes from
+    an empty directory to a flashed board.
+  </p>
+
+  <table class="rtd-table">
+    <tr><th>Makefile</th><td><code>monaco.mk</code>, board files in <code>monaco/</code></td></tr>
+    <tr><th>Manifest</th><td><code>monaco.xml</code></td></tr>
+    <tr><th>CPUs</th><td>4 x Cortex-A78C (cluster 0), 4 x Cortex-A55 (cluster 1)</td></tr>
+    <tr><th>Storage</th><td>eMMC (<code>sdhc_1</code>), 512-byte blocks; A/B <code>tz</code> and <code>uefi</code> partitions</td></tr>
+    <tr><th>Console</th><td>QUPv3 wrap 0, serial engine 7 (<code>0x99c000</code>): <code>ttyMSM0</code>, 115200 8N1</td></tr>
+    <tr><th>Stock firmware kept</th><td>PBL, XBL and every partition other than <code>tz_a</code>/<code>tz_b</code>, <code>uefi_a</code>/<code>uefi_b</code> and <code>efi</code></td></tr>
+  </table>
+
+  <h2 id="boot-chain">Boot chain</h2>
+<pre>XBL -&gt; TF-A BL2 (tz) -&gt; BL31 -&gt; OP-TEE -&gt; U-Boot (uefi) -&gt; UKI (efi): Linux at EL2</pre>
+  <p>
+    XBL loads TF-A BL2 from the <code>tz</code> partition and the FIP, wrapped in an
+    ELF, from the <code>uefi</code> partition. BL2 loads BL31, OP-TEE (BL32) and
+    U-Boot (BL33) from the FIP. U-Boot starts the UKI from the ESP through UEFI
+    (<code>bootefi bootmgr</code>, which finds it as
+    <code>EFI/BOOT/bootaa64.efi</code>).
+  </p>
+  <table class="rtd-table">
+    <tr><th>Stage</th><th>Address</th><th>Notes</th></tr>
+    <tr><td>TF-A BL2</td><td><code>0x14680000</code></td><td>System IMEM: on Monaco XBL enters the TZ image there</td></tr>
+    <tr><td>FIP ELF</td><td><code>0xaf000000</code></td><td>Loaded by XBL from <code>uefi</code></td></tr>
+    <tr><td>TF-A BL31</td><td><code>0x1c200000</code></td><td>Starts the CPUCP firmware XBL loaded, and brings up the Cortex-A55 clock domain through it</td></tr>
+    <tr><td>OP-TEE</td><td><code>0x1c300000</code></td><td><code>PLATFORM=qcom-monaco</code></td></tr>
+    <tr><td>U-Boot</td><td><code>0xaf400000</code></td><td>Moves the boot to the first Cortex-A55, see below</td></tr>
+  </table>
+
+  <h3 id="images">Images</h3>
+  <table class="rtd-table">
+    <tr><th>Image</th><th>Partitions</th><th>Contents</th><th>Target</th></tr>
+    <tr><td><code>tz.mbn</code></td><td><code>tz_a</code>, <code>tz_b</code></td><td>TF-A BL2 with a SWIV segment and a QTI signature</td><td><code>make tz-qti-sign</code> (from <code>bl2.elf</code>, made by <code>make bootimage</code>)</td></tr>
+    <tr><td><code>fip.elf</code></td><td><code>uefi_a</code>, <code>uefi_b</code></td><td>FIP (BL31, OP-TEE, U-Boot) in an ELF loaded at <code>0xaf000000</code>, qtestsign signature</td><td><code>make bootimage</code></td></tr>
+    <tr><td><code>efi.bin</code></td><td><code>efi</code></td><td>256 MiB FAT32 ESP with the UKI as <code>EFI/Linux/uki.efi</code> and <code>EFI/BOOT/bootaa64.efi</code>, formatted with 512-byte sectors (the eMMC block size)</td><td><code>make efi</code></td></tr>
+  </table>
+
+  <h2 id="tz-stage">The TZ stage: TF-A BL2 or U-Boot SPL</h2>
+  <p>
+    TF-A BL2 is the TZ stage by default. <code>TZ_IMAGE=u-boot-spl</code> makes
+    U-Boot SPL the TZ stage instead, as on the IQ-9075 EVK. Pass the same
+    <code>TZ_IMAGE</code> to <code>bootimage</code>,
+    <code>tz-qti-sign</code> and <code>flash-loader</code>:
+  </p>
+<pre>make bootimage TZ_IMAGE=u-boot-spl   # u-boot-spl.elf, uefi.elf
+make tz-qti-sign TZ_IMAGE=u-boot-spl     # tz.mbn from u-boot-spl.elf
+make flash-loader TZ_IMAGE=u-boot-spl</pre>
+  <p>
+    XBL loads the <code>uefi</code> image to <code>0xaf000000</code> before it
+    starts the TZ stage, so SPL needs no storage driver: it finds a FIT with BL31,
+    OP-TEE and U-Boot there (<code>monaco/uefi.its</code>, wrapped and signed like
+    the FIP ELF), loads the three images to the addresses in the table above and
+    starts BL31. TF-A is built as BL31 only.
+  </p>
+  <table class="rtd-table">
+    <tr><th></th><th><code>TZ_IMAGE=bl2</code> (default)</th><th><code>TZ_IMAGE=u-boot-spl</code></th></tr>
+    <tr><td>TZ image (<code>tz.mbn</code>)</td><td>TF-A BL2 (<code>bl2.elf</code>)</td><td>U-Boot SPL (<code>u-boot-spl.elf</code>, <code>qcom_monaco_spl_defconfig</code>)</td></tr>
+    <tr><td>uefi image</td><td><code>fip.elf</code>: FIP</td><td><code>uefi.elf</code>: FIT (<code>uefi.itb</code>)</td></tr>
+    <tr><td>TF-A build</td><td><code>bl2</code> and <code>fip</code></td><td><code>bl31</code></td></tr>
+  </table>
+  <p>
+    Unlike on the IQ-9075 EVK, the SPL needs a QTI signature, like BL2: XBL checks
+    the QTI signature of the TZ image even with secure boot disabled (see
+    <a href="signing.html">Signing</a>). SPL has to fit where XBL enters the TZ
+    image, <code>0x14680000</code> to <code>0x1469a000</code> in system IMEM, with
+    its BSS and stack; it prints its banner on the debug UART XBL leaves set up.
+    SPL needs a U-Boot tree with <code>qcom_monaco_spl_defconfig</code>, which the
+    tree <code>monaco.xml</code> pins does not have yet, and it has not been run
+    on a board yet.
+  </p>
+
+  <h2 id="sources">Sources</h2>
+  <table class="rtd-table">
+    <tr><th>Tree</th><th>Repository (monaco.xml)</th><th>Build</th></tr>
+    <tr><td>TF-A</td><td>EmbeddedAndroid/arm-trusted-firmware, <code>monza</code>: the Monaco series under review
+        (<a href="https://review.trustedfirmware.org/q/topic:qti-monaco">Gerrit topic qti-monaco</a>) on the hoya
+        CPUCP start series (Gerrit 54862/54863), then the SAIL notification (Gerrit 54579) and patches not
+        submitted yet: the VENTUNO Q reset fixes and the Monaco clock back-end and RPMh data the ADSP needs</td>
+        <td><code>PLAT=monza SPD=opteed</code>, <code>bl2</code> and <code>fip</code> (<code>bl31</code> for SPL)</td></tr>
+    <tr><td>OP-TEE</td><td>EmbeddedAndroid/optee_os, <code>ventuno-q</code>: Monaco platform support
+        (<a href="https://github.com/OP-TEE/optee_os/pull/8053">optee_os pull request 8053</a>), then the Monaco
+        PAS clocks and pseudo-TA that start the DSPs, not submitted yet</td>
+        <td><code>PLATFORM=qcom-monaco</code>, log level 2 (prints the version)</td></tr>
+    <tr><td>U-Boot</td><td>EmbeddedAndroid/u-boot, <code>monza</code>: the VENTUNO Q series, respun after its review
+        on the U-Boot list, then the Monaco SPL patches, not submitted yet</td>
+        <td><code>qcom_defconfig</code> + <code>tfa-optee.config</code> + <code>arduino-ventuno-q.config</code>;
+        SPL: <code>qcom_monaco_spl_defconfig</code></td></tr>
+    <tr><td>Linux</td><td>EmbeddedAndroid/linux, <code>monza</code>: linux-next with Monaco and VENTUNO Q patches
+        not submitted yet (see below)</td>
+        <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>
+  </table>
+  <p>
+    The board device tree (<code>monaco-arduino-monza.dts</code>) is in mainline
+    since v7.1, as is the Monaco EL2 overlay (<code>monaco-el2.dtso</code>). The
+    kernel has no combined EL2 DTB for this board, so <code>monaco.mk</code> builds
+    the board DTB with symbols and applies the overlay with the kernel's
+    <code>fdtoverlay</code>.
+  </p>
+  <p>
+    The pinned kernel carries patches that are not submitted yet: DSP (PAS)
+    start without a resource table, audio recovery across an ADSP restart,
+    the fixes for booting with <code>maxcpus</code>, and two PCIe fixes for
+    the PI7C9X2G304 switch on PCIe0: L1 PM Substates disabled on the root
+    port link (config reads to the switch could stall a CPU) and the switch's
+    Training Error masked (it made AER reset the TUSB7340 link in a loop).
+  </p>
+
+  <h3 id="boot-cpu">Boot CPU</h3>
+  <p>
+    XBL and TF-A enter U-Boot on CPU0, a Cortex-A78C. The Cortex-A78C cores have
+    pointer authentication and the Cortex-A55 cores do not, and Linux only brings
+    up CPUs that match its boot CPU in that respect. The board configuration
+    (<code>CONFIG_BOOT0_QCOM_BOOT_CPU</code>) makes U-Boot start the first
+    Cortex-A55 (MPIDR <code>0x10000</code>) with PSCI <code>CPU_ON</code> and turn
+    CPU0 off, so U-Boot and Linux run on a Cortex-A55 and all eight CPUs come up.
+  </p>
+
+  <h2 id="build">Build</h2>
+<pre>make toolchains
+make all                         # bl2.elf, fip.elf, efi.bin in monaco/output/
+make tz-qti-sign QTI_SIGN_DIR=... CASS_CAPABILITY=... \
+     QTI_SIGN_SERVER_URL=... QTI_SIGN_SERVER_PORT=...   # tz.mbn</pre>
+  <p>
+    <code>tz-qti-sign</code> adds the SWIV segment and signs <code>bl2.elf</code> with
+    Qualcomm <code>sectools</code> through the QTI remote signing service; the
+    Monaco TZ security profile comes from the Qualcomm signing package. Without
+    access to it, put a signed <code>tz.mbn</code> in <code>monaco/input/</code>:
+    <code>flash-loader</code> uses <code>monaco/output/tz.mbn</code> when there is
+    one and <code>monaco/input/tz.mbn</code> otherwise. <code>make bootimage</code>
+    removes <code>monaco/output/tz.mbn</code>, as it no longer matches the new
+    <code>bl2.elf</code>.
+  </p>
+  <p>
+    Each <code>make</code> invocation stamps a build identifier,
+    <code>BUILD_ID</code> (default <code>monaco-&lt;UTC date-time&gt;</code>), into
+    the TF-A build string, the OP-TEE version, the U-Boot and Linux versions and
+    <code>/etc/issue</code>, and fails the build if an image lacks it.
+    <code>monaco/output/build-info.txt</code> records the identifier of each image,
+    so the console shows which build is running.
+  </p>
+
+  <h2 id="flash">Flash</h2>
+  <p>
+    qdl writes the images by partition name; the partition table and everything
+    else on the eMMC stay as they are. Both slots are written, so the boot chain
+    cannot fall back to the stock images. The firehose programmer comes from the
+    board's stock software image and goes in <code>monaco/input/</code> (or set
+    <code>FIREHOSE</code>); see <code>monaco/input/README.md</code>.
+  </p>
+<pre>make flash-loader    # tz_a, tz_b &lt;- tz.mbn; uefi_a, uefi_b &lt;- fip.elf
+make flash-kernel    # efi &lt;- efi.bin</pre>
+  <p>which run:</p>
+<pre>qdl --storage emmc prog_firehose_ddr.elf \
+    write tz_a tz.mbn write tz_b tz.mbn \
+    write uefi_a fip.elf write uefi_b fip.elf
+qdl --storage emmc prog_firehose_ddr.elf write efi efi.bin</pre>
+
+  <h2 id="dsp">DSPs and audio</h2>
+  <p>
+    The rootfs carries the ADSP, CDSP and GPDSP firmware from linux-firmware
+    (<code>qcom/qcs8300</code>), the FastRPC userspace and runtime, and
+    <code>qcom-tests</code> (ADSP and CDSP FastRPC, the GPDSP boot state, CPU
+    stress, and CDSP FastRPC in an unsigned PD). The FastRPC runtime has to come
+    from the DSP build of the firmware, since a DSP only loads the shell and skels
+    whose hashes its signed image carries; the build installs the QCS8300-RIDE
+    runtime of that build under the Arduino Monza path the DT model maps to, and
+    checks the pairing.
+  </p>
+  <p>
+    The DSPs are started through the OP-TEE PAS service (the Monaco PAS
+    pseudo-TA, embedded as an early TA), which relies on the TF-A Monaco clock
+    setup; <code>monaco.xml</code> pins OP-TEE and TF-A revisions with both.
+  </p>
+  <p>
+    The sound card, ALSA id <code>arduinomonza</code> (card 1; the loopback
+    card is card 0), runs on the ADSP with the AudioReach topology from
+    linux-firmware. Playback on the headphone output needs the route the
+    upstream UCM profile sets:
+  </p>
+<pre>amixer -c arduinomonza cset name='LPI_MI2S_RX_0 Audio Mixer MultiMedia1' on
+amixer -c arduinomonza cset name='Headphone Switch' on
+aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>
