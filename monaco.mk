@@ -120,6 +120,14 @@ TF_A_PATH ?= $(ROOT)/arm-trusted-firmware
 include common.mk
 include toolchain.mk
 
+# common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
+# which turns the Monaco target.mk's '+= qcom_pas/...' into a no-op. Append
+# the qcom_pas PAS TA here (after the include) so it is embedded as an early TA
+# and advertised on the TEE bus; qcom_pas_tee (Linux) only binds when that TA
+# (cff7d191) is enumerated, and the ADSP, CDSP and GP-DSP0 remoteprocs stay in
+# deferred probe without it.
+CFG_IN_TREE_EARLY_TAS += qcom_pas/cff7d191-7ca0-4784-af13-48223b9a4fbe
+
 OPTEE_OS_COMMON_EXTRA_FLAGS += TEE_IMPL_VERSION=$(BUILD_ID)
 
 # Buildroot rejects PATH entries containing spaces (Windows paths from WSL).
