@@ -15,11 +15,14 @@ top-level makefile and subdirectory.
 | Platform | SoC | Board | Makefile |
 |----------|-----|-------|----------|
 | Lemans | QCS9100 | Qualcomm IQ-9075 EVK | `lemans.mk` |
+| Monaco | QCS8275 | Arduino VENTUNO Q | `monaco.mk` |
 
 Files shared by the Qualcomm platforms (SWIV tool, UKI stub, qrtr-ns and
 tqftpserv init scripts) live in `qcom/`.
 
 ## Quick start
+
+IQ-9075 EVK (Lemans):
 
 ```sh
 # Build everything
@@ -34,11 +37,23 @@ make -f lemans.mk flash-loader  # bootloader chain (first-time / after TF-A chan
 make -f lemans.mk flash-kernel  # EFI partition only (kernel/initramfs iteration)
 ```
 
-## Firmware blobs
+Arduino VENTUNO Q (Monaco):
 
-Both `flash-loader` and `flash-kernel` need Qualcomm-proprietary firmware
-binaries (XBL, AOP, firehose programmer, GPT tables, rawprogram XMLs).
-These are resolved in priority order:
+```sh
+make -f monaco.mk all           # bl2.elf + fip.elf (boot chain), efi.bin (kernel + rootfs)
+make -f monaco.mk tz-qti-sign       # tz.mbn: QTI-signed BL2 (needs QTI remote signing access)
+
+# Flash with the board in EDL mode; the eMMC firehose programmer goes in
+# monaco/input/ (see monaco/input/README.md)
+make -f monaco.mk flash-loader  # tz_a/tz_b + uefi_a/uefi_b
+make -f monaco.mk flash-kernel  # efi partition only
+```
+
+## Firmware blobs (IQ-9075 EVK)
+
+On the IQ-9075 EVK both `flash-loader` and `flash-kernel` need
+Qualcomm-proprietary firmware binaries (XBL, AOP, firehose programmer, GPT
+tables, rawprogram XMLs). These are resolved in priority order:
 
 1. `{platform}/input/` — manually placed files
 2. Yocto deploy directory — if `make yocto` has been run

@@ -969,6 +969,9 @@ def get_swiv_segment_address(target):
                     PIMEM_BASE_ADDR +
                     PIMEM_DEVCFG_SIZE +
                     XBL_SEC_PIMEM_SIZE)
+        case "monaco":
+            # Read from the stock Monaco TZ image's SWIV segment.
+            return 0x1C040000
         case _:
             print("Unknown target. Aborting!")
             sys.exit(2)

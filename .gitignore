@@ -13,3 +13,8 @@ pi3.cfg
 /oe-core/
 /yocto/
 /bitbake/
+# monaco.mk outputs and board inputs (see monaco/*/README.md)
+/monaco/input/*
+!/monaco/input/README.md
+/monaco/output/*
+!/monaco/output/README.md
