@@ -115,7 +115,7 @@ BR2_PACKAGE_FASTRPC_EXT ?= y
 # QRTR userspace (libqrtr + qrtr-ns). qrtr-ns is the QMI name service the DSP
 # subsystems need to register their servreg protection domains; without it the
 # DSP rootPD never finishes coming up and FastRPC stalls (GLINK intent timeout).
-# No systemd here, so qrtr-ns is launched from lemans/overlay/etc/init.d/.
+# No systemd here, so qrtr-ns is launched from qcom/overlay/etc/init.d/.
 BR2_PACKAGE_QRTR_EXT ?= y
 
 # tqftpserv — TFTP-over-QRTR file server. The CDSP FastRPC rootPD reads its
@@ -153,10 +153,12 @@ BR2_PACKAGE_BUSYBOX_WATCHDOG = y
 
 # OP-TEE OS, TF-A BL31, Linux, U-Boot and OP-TEE are built outside of Buildroot
 BR2_LINUX_KERNEL              = n
-# Overlay: DSP firmware (staged by fetch-blobs, see below). The kernel is
+# Overlays: the qrtr-ns and tqftpserv init scripts shared by the Qualcomm
+# boards (qcom/overlay) and lemans/overlay, where the DSP firmware is staged
+# (by fetch-blobs, see below). The kernel is
 # CONFIG_MODULES=n (see linux-defconfig), so there are no loadable modules to
 # overlay.
-BR2_ROOTFS_OVERLAY            = $(OVERLAY_DIR)
+BR2_ROOTFS_OVERLAY            = $(CURDIR)/qcom/overlay $(OVERLAY_DIR)
 BR2_TARGET_ARM_TRUSTED_FIRMWARE = n
 BR2_TARGET_OPTEE_OS           = n
 BR2_TARGET_UBOOT              = n
@@ -174,7 +176,7 @@ BR2_PACKAGE_OPTEE_BENCHMARK   = n
 TF_A_PATH      ?= $(ROOT)/arm-trusted-firmware
 U-BOOT_PATH    ?= $(ROOT)/u-boot
 
-SWIV_SCRIPT ?= $(CURDIR)/lemans/security/swiv_build_utility.py
+SWIV_SCRIPT ?= $(CURDIR)/qcom/security/swiv_build_utility.py
 
 ################################################################################
 # Source overlays
@@ -768,7 +770,7 @@ efi: linux buildroot linux-firmware
 		--initrd=$(BR_INITRAMFS) \
 		--cmdline='$(LINUX_CMDLINE)' \
 		--efi-arch=aa64 \
-		--stub=$(CURDIR)/lemans/ukify/linuxaa64.efi.stub \
+		--stub=$(CURDIR)/qcom/ukify/linuxaa64.efi.stub \
 		--os-release=@/etc/os-release \
 		--devicetree=$(LINUX_DTB) \
 		--output=$(LINUX_PATH)/uki.efi
@@ -812,7 +814,7 @@ efi-kernel-only: linux
 		--linux=$(LINUX_IMAGE) \
 		--cmdline='$(YOCTOFS_CMDLINE)' \
 		--efi-arch=aa64 \
-		--stub=$(CURDIR)/lemans/ukify/linuxaa64.efi.stub \
+		--stub=$(CURDIR)/qcom/ukify/linuxaa64.efi.stub \
 		--os-release=@/etc/os-release \
 		--devicetree=$(LINUX_DTB) \
 		--output=$(LINUX_PATH)/uki.efi
