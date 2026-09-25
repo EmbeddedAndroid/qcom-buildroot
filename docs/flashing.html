@@ -48,7 +48,7 @@
   <table class="rtd-table">
     <tr><th>Partition</th><th>Holds</th></tr>
     <tr><td><code>tz</code> (A/B: <code>tz_a</code>, <code>tz_b</code>)</td><td>The TZ stage (see <a href="signing.html">Signing</a>)</td></tr>
-    <tr><td><code>uefi</code> (A/B: <code>uefi_a</code>, <code>uefi_b</code>)</td><td>BL31, OP-TEE and U-Boot, in the container the TZ stage or XBL loads</td></tr>
+    <tr><td><code>uefi</code> (A/B: <code>uefi_a</code>, <code>uefi_b</code>)</td><td>BL31, OP-TEE and U-Boot: a FIT the SPL reads (IQ-9075 EVK) or a FIP ELF XBL loads (VENTUNO Q)</td></tr>
     <tr><td><code>efi</code></td><td>The ESP with the UKI (<code>efi.bin</code>)</td></tr>
   </table>
 
@@ -61,10 +61,17 @@
         <td><code>flash-loader</code> (LUNs 1 to 5: the full boot chain, stock firmware included),
             <code>flash-kernel</code> (LUN 0: <code>efi.bin</code>), plus recovery and
             Windows packaging targets</td></tr>
+    <tr><td><a href="ventuno-q.html">VENTUNO Q</a></td>
+        <td>eMMC</td>
+        <td>Firehose from the board's stock software image, placed in <code>monaco/input/</code>; the stock partition table is kept</td>
+        <td><code>flash-loader</code> (<code>tz_a</code>, <code>tz_b</code>, <code>uefi_a</code>, <code>uefi_b</code> by name),
+            <code>flash-kernel</code> (<code>efi</code> by name)</td></tr>
   </table>
   <p>
-    The <a href="iq-9075-evk.html">board pages</a> and quick starts give the exact
-    commands.
+    The board pages (<a href="iq-9075-evk.html#flash">IQ-9075 EVK</a>,
+    <a href="ventuno-q.html#flash">VENTUNO Q</a>) and quick starts give the exact
+    commands. The partition-by-name <code>write</code> command was tested with qdl
+    <code>v2.8-46-g657f12f</code>.
   </p>
 
 </main>
