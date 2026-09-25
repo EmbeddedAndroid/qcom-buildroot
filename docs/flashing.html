@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flashing · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="flashing">
+<main class="rtd-doc">
+
+  <h1 id="flashing">Flashing</h1>
+  <p>
+    All boards are flashed the same way: the board is put in EDL (Emergency
+    Download) mode, the host loads a firehose programmer into it over USB, and
+    the programmer writes the images to the boot storage. The board makefiles do
+    this with <a href="https://github.com/linux-msm/qdl">qdl</a> on the host that
+    runs <code>make</code>, so the board's USB port has to be connected to that
+    host.
+  </p>
+
+  <h2 id="edl">EDL mode and the firehose programmer</h2>
+  <p>
+    In EDL mode the board enumerates on USB as <code>05c6:9008</code>. How to get
+    there is board specific; see the board page.
+    qdl then uploads the firehose programmer, <code>prog_firehose_ddr.elf</code>
+    from the board's Qualcomm software, and sends it the write commands.
+  </p>
+
+  <h2 id="two-ways">Two ways to write</h2>
+  <table class="rtd-table">
+    <tr><th>Method</th><th>qdl invocation</th><th>Writes</th></tr>
+    <tr><td>Partition layout</td>
+        <td><code>qdl prog_firehose_ddr.elf rawprogram&lt;N&gt;.xml patch&lt;N&gt;.xml ...</code></td>
+        <td>Whole storage units: GPT, every partition listed with a file, and the patches
+            that fix up the GPT. The XMLs and GPT images come with the board software
+            or from <a href="https://github.com/qualcomm-linux/qcom-ptool">qcom-ptool</a>.</td></tr>
+    <tr><td>Partition by name</td>
+        <td><code>qdl --storage &lt;type&gt; prog_firehose_ddr.elf write &lt;label&gt; &lt;file&gt; ...</code></td>
+        <td>Only the named partitions, found by their GPT label; everything else,
+            including the partition table, stays as it is.</td></tr>
+  </table>
+
+  <h2 id="partitions">Partitions the open boot chain uses</h2>
+  <table class="rtd-table">
+    <tr><th>Partition</th><th>Holds</th></tr>
+    <tr><td><code>tz</code> (A/B: <code>tz_a</code>, <code>tz_b</code>)</td><td>The TZ stage (see <a href="signing.html">Signing</a>)</td></tr>
+    <tr><td><code>uefi</code> (A/B: <code>uefi_a</code>, <code>uefi_b</code>)</td><td>BL31, OP-TEE and U-Boot, in the container the TZ stage or XBL loads</td></tr>
+    <tr><td><code>efi</code></td><td>The ESP with the UKI (<code>efi.bin</code>)</td></tr>
+  </table>
+
+  <h2 id="per-board">Per board</h2>
+  <table class="rtd-table">
+    <tr><th>Board</th><th>Storage</th><th>Firehose and layout</th><th>Targets</th></tr>
+    <tr><td><a href="iq-9075-evk.html">IQ-9075 EVK</a></td>
+        <td>UFS, 6 LUNs</td>
+        <td>From <code>make fetch-blobs</code>: the public QCS9100 boot binaries and CDT, partition XMLs generated with qcom-ptool</td>
+        <td><code>flash-loader</code> (LUNs 1 to 5: the full boot chain, stock firmware included),
+            <code>flash-kernel</code> (LUN 0: <code>efi.bin</code>), plus recovery and
+            Windows packaging targets</td></tr>
+  </table>
+  <p>
+    The <a href="iq-9075-evk.html">board pages</a> and quick starts give the exact
+    commands.
+  </p>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>
