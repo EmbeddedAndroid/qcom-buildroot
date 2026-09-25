@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build System · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="build">
+<main class="rtd-doc">
+
+  <h1 id="build-system">Build System</h1>
+  <p>
+    This repository is a fork of the <a href="https://github.com/OP-TEE/build">OP-TEE build.git</a>
+    project: every platform has one top-level makefile, named after the SoC, and a
+    directory of the same name. The Qualcomm boards follow that layout and share
+    what is not board specific. This page describes the parts all boards have in
+    common; the board pages describe the rest.
+  </p>
+
+  <h2 id="boards">Boards</h2>
+  <table class="rtd-table">
+    <tr><th>Board</th><th>SoC</th><th>Manifest</th><th>Makefile</th><th>Board directory</th></tr>
+    <tr><td><a href="iq-9075-evk.html">Qualcomm IQ-9075 EVK</a></td><td>Lemans (QCS9075)</td><td><code>lemans.xml</code></td><td><code>lemans.mk</code></td><td><code>lemans/</code></td></tr>
+  </table>
+
+  <h2 id="manifests">Manifests</h2>
+  <p>
+    Each board has a manifest in <a href="https://github.com/ldts/qcom-manifest">qcom-manifest</a>.
+    It includes the shared <code>common.xml</code> (OP-TEE client and tests,
+    Buildroot, the OP-TEE examples), replaces the Linux and OP-TEE trees with the
+    ones the board needs, adds TF-A and U-Boot, and pins every tree to a
+    revision. The <code>build</code> project links the board makefile to
+    <code>build/Makefile</code>, so <code>make</code> in <code>build/</code> builds
+    that board:
+  </p>
+<pre>repo init -u https://github.com/ldts/qcom-manifest -m &lt;platform&gt;.xml
+repo sync -j4 --no-clone-bundle</pre>
+
+  <h2 id="workspace">Workspace layout</h2>
+<pre>&lt;workspace&gt;/
+  build/                 this repository; Makefile -&gt; &lt;platform&gt;.mk
+  arm-trusted-firmware/  TF-A
+  optee_os/              OP-TEE OS
+  u-boot/                U-Boot
+  linux/                 Linux
+  buildroot/             Buildroot
+  optee_client/ optee_test/ optee_examples/ ...
+  toolchains/            cross toolchains (make toolchains)
+  out-br/                Buildroot output; out-br/images/rootfs.cpio.gz
+  qtestsign/             cloned by the build when first needed</pre>
+  <p>Inside <code>build/</code>:</p>
+  <table class="rtd-table">
+    <tr><th>Path</th><th>Contents</th></tr>
+    <tr><td><code>&lt;platform&gt;.mk</code></td><td>The board makefile: component builds, image assembly, signing and flashing</td></tr>
+    <tr><td><code>&lt;platform&gt;/</code></td><td>Board files: <code>input/</code> (files the build does not produce), <code>output/</code> (images), <code>overlay/</code> (rootfs files), patches</td></tr>
+    <tr><td><code>qcom/</code></td><td>Files shared by the Qualcomm boards: the SWIV tool (<code>qcom/security/</code>), the systemd EFI stub for the UKI (<code>qcom/ukify/</code>), the qrtr-ns and tqftpserv init scripts (<code>qcom/overlay/</code>)</td></tr>
+    <tr><td><code>common.mk</code>, <code>toolchain.mk</code></td><td>OP-TEE build.git: OP-TEE and Buildroot rules shared by all platforms, toolchain download</td></tr>
+    <tr><td><code>br-ext/</code></td><td>Buildroot external tree: OP-TEE client, xtest and examples, and the Qualcomm DSP userspace packages (<code>fastrpc_ext</code>, <code>qrtr_ext</code>, <code>tqftpserv_ext</code>)</td></tr>
+    <tr><td><code>docs/</code></td><td>This documentation</td></tr>
+  </table>
+
+  <h2 id="images">Images</h2>
+  <p>
+    Every board ends up with three images, for the partitions that hold the open
+    boot chain and the OS. The Qualcomm boot firmware in front of them (XBL and
+    the firmware it loads) is the stock release; on the IQ-9075 EVK
+    <code>flash-loader</code> writes it from the public boot binaries that
+    <code>make fetch-blobs</code> downloads.
+  </p>
+  <table class="rtd-table">
+    <tr><th>Board</th><th>tz partition</th><th>uefi partition</th><th>efi partition</th></tr>
+    <tr><td>IQ-9075 EVK</td>
+        <td><code>tz.mbn</code>: U-Boot SPL with a SWIV segment, qtestsign signature</td>
+        <td><code>uefi.elf</code>: FIT image with BL31, OP-TEE and U-Boot proper, loaded by the SPL</td>
+        <td><code>efi.bin</code>: FAT32 ESP with the UKI</td></tr>
+  </table>
+  <p>
+    <a href="signing.html">Signing</a> explains what XBL checks on these images and
+    <a href="flashing.html">Flashing</a> how they are written.
+  </p>
+
+  <h2 id="targets">Make targets</h2>
+  <p>The board makefiles share these target names (<code>make help</code> lists all of them):</p>
+  <table class="rtd-table">
+    <tr><th>Target</th><th>Result</th></tr>
+    <tr><td><code>toolchains</code></td><td>Cross toolchains in <code>toolchains/</code> (see <a href="toolchain.html#toolchains">Host Setup</a>)</td></tr>
+    <tr><td><code>bootimage</code></td><td>The tz and uefi images in <code>&lt;platform&gt;/output/</code></td></tr>
+    <tr><td><code>efi</code></td><td>Linux, the Buildroot rootfs, the UKI and <code>&lt;platform&gt;/output/efi.bin</code></td></tr>
+    <tr><td><code>flash-loader</code></td><td>Writes the tz and uefi images with qdl (board in EDL mode)</td></tr>
+    <tr><td><code>flash-kernel</code></td><td>Writes <code>efi.bin</code> with qdl (board in EDL mode)</td></tr>
+    <tr><td><code>optee-os</code>, <code>tfa</code>, <code>u-boot</code>, <code>linux</code>, <code>buildroot</code></td><td>One component, incrementally</td></tr>
+    <tr><td><code>linux-defconfig</code></td><td>Regenerates the kernel <code>.config</code> (<code>linux</code> runs it when there is none)</td></tr>
+    <tr><td><code>clean</code>, <code>&lt;component&gt;-clean</code></td><td>Cleans everything or one component</td></tr>
+  </table>
+
+  <h2 id="linux-rootfs">Linux, rootfs and UKI</h2>
+  <ul>
+    <li>Linux is built from the arm64 <code>defconfig</code> with OP-TEE enabled,
+      <code>CONFIG_MODULES</code> off (everything the board needs is built in) and
+      <code>EFI_ZBOOT</code>, which produces <code>vmlinuz.efi</code>. It runs at EL2:
+      the board DTB is combined with the SoC's EL2 overlay.</li>
+    <li>Buildroot builds a small rootfs as a gzip-compressed cpio, with the OP-TEE
+      client (<code>tee-supplicant</code>), xtest and the OP-TEE examples. Board files
+      come in through <code>BR2_ROOTFS_OVERLAY</code>: <code>qcom/overlay</code>, then
+      the board's own overlay.</li>
+    <li><code>ukify</code> bundles the kernel, the DTB, the rootfs as initramfs and
+      the kernel command line into one EFI binary, the UKI, using the stub in
+      <code>qcom/ukify/</code>. <code>efi.bin</code> is a FAT32 image holding it
+      as <code>EFI/Linux/uki.efi</code>; U-Boot starts it through UEFI (on the
+      IQ-9075 EVK through systemd-boot, installed as
+      <code>EFI/BOOT/bootaa64.efi</code>).</li>
+    <li>The console is the Qualcomm GENI UART, <code>ttyMSM0</code> at 115200 8N1.</li>
+  </ul>
+
+  <h2 id="board-files">Adding a board</h2>
+  <ol>
+    <li>A manifest <code>&lt;platform&gt;.xml</code> in qcom-manifest that links
+      <code>&lt;platform&gt;.mk</code> to <code>build/Makefile</code>.</li>
+    <li><code>&lt;platform&gt;.mk</code> and <code>&lt;platform&gt;/</code> here, using
+      <code>qcom/</code> for the shared files and the target names above.</li>
+    <li>A board page and a quick start in <code>docs/</code>, a row in the tables of
+      the concept pages, and the pages in the <code>NAV</code> list of
+      <code>docs/_rtd.js</code> (checked by <code>node --test docs/_rtd.test.js</code>).</li>
+  </ol>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>

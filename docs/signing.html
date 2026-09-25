@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signing · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="signing">
+<main class="rtd-doc">
+
+  <h1 id="signing">Signing</h1>
+  <p>
+    XBL, the Qualcomm boot loader, loads the image in the <code>tz</code>
+    partition as a signed ELF (MBN) image and hands control to it. That image is
+    the first stage of the open boot chain, so the build signs it in the form the
+    board's XBL accepts, also on boards where secure boot is not enabled. Which
+    form that is depends on the SoC.
+  </p>
+
+  <h2 id="tz-stage">The TZ stage</h2>
+  <p>
+    The tz partition holds the first open-source stage of the chain. It runs at
+    EL3 and loads the rest: TF-A BL31, OP-TEE (BL32) and U-Boot (BL33).
+  </p>
+  <table class="rtd-table">
+    <tr><th>Board</th><th>TZ stage</th><th>Loads the rest from</th></tr>
+    <tr><td>IQ-9075 EVK</td><td>U-Boot SPL</td><td>The FIT image in the uefi partition (<code>SPL_LOAD_FIT</code>, <code>SPL_ATF</code>)</td></tr>
+  </table>
+
+  <h2 id="swiv">SWIV segment</h2>
+  <p>
+    XBL expects the TZ image to carry a SW image version (SWIV) segment at a
+    SoC-specific address. <code>qcom/security/swiv_build_utility.py</code> adds it
+    to the ELF before signing:
+  </p>
+<pre>python3 qcom/security/swiv_build_utility.py &lt;output.elf&gt; &lt;input.elf&gt; &lt;chipset&gt;</pre>
+  <table class="rtd-table">
+    <tr><th>Chipset argument</th><th>SWIV segment address</th></tr>
+    <tr><td><code>lemans</code></td><td><code>0x1c042000</code></td></tr>
+  </table>
+
+  <h2 id="qtestsign">qtestsign</h2>
+  <p>
+    <a href="https://github.com/msm8916-mainline/qtestsign">qtestsign</a> signs an
+    image with a test certificate chain it generates itself. It runs locally and
+    needs no Qualcomm account. The build clones it into <code>qtestsign/</code>
+    next to <code>build/</code> the first time it is needed.
+  </p>
+
+  <h2 id="per-board">What each board needs</h2>
+  <table class="rtd-table">
+    <tr><th>Board</th><th>TZ image</th><th>uefi image</th><th>Target</th></tr>
+    <tr><td>IQ-9075 EVK</td>
+        <td>U-Boot SPL + SWIV, qtestsign (<code>-v6 tz</code>)</td>
+        <td>FIT image, unsigned; the SPL reads it from the partition</td>
+        <td><code>make spl</code> (part of <code>make bootimage</code>)</td></tr>
+  </table>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>

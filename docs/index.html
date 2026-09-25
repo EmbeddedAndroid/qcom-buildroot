@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OP-TEE on Qualcomm Lemans (SA8775P / QCS9075)</title>
+<title>OP-TEE on Qualcomm Platforms</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
@@ -12,22 +12,11 @@
 <body class="rtd" data-page="index">
 <main class="rtd-doc">
 
-  <a href="https://www.qualcomm.com/developer/hardware/qualcomm-iq-9075-evaluation-kit-evk" style="text-decoration:none;">
-    <div style="position:relative; max-width:960px; margin:14px 0 22px;">
-      <img src="img/iq-9075-evk-banner.jpg"
-           alt="Qualcomm IQ-9075 Evaluation Kit (EVK) — Dragonwing board"
-           style="width:100%; height:auto; display:block; border-radius:8px;">
-      <span style="position:absolute; left:3%; top:50%; transform:translateY(-50%);
-                   color:#fff; font-weight:700; line-height:1.15;
-                   font-size:clamp(20px, 3.2vw, 40px);
-                   text-shadow:0 2px 10px rgba(0,0,0,.6);">Open Boot Firmware<br>
-        <span style="font-weight:400; font-size:.5em; line-height:1.2;">IQ-9075 Evaluation Kit</span></span>
-    </div>
-  </a>
+  <h1 id="index">Open Boot Firmware on Qualcomm Platforms</h1>
   <p>
-    A build system for OP-TEE on the Qualcomm <strong><a href="https://www.qualcomm.com/developer/hardware/qualcomm-iq-9075-evaluation-kit-evk">Lemans EVK</a></strong>
-    (SA8775P / QCS9075). Part of the <a href="https://github.com/OP-TEE/build">OP-TEE build.git</a> project,
-    extended for this platform to enable TZ open firmware development.
+    A build system for OP-TEE and the open boot chain (TF-A, OP-TEE, U-Boot and
+    Linux) on Qualcomm boards. Part of the <a href="https://github.com/OP-TEE/build">OP-TEE build.git</a> project,
+    extended for Qualcomm platforms to enable TZ open firmware development.
     Work from this repository is being upstreamed to the public
     <a href="https://github.com/OP-TEE/">OP-TEE repositories</a>.
   </p>
@@ -35,15 +24,41 @@
   <div class="rtd-note">
     <strong>Note:</strong> This is an active development build system; interfaces,
     manifest revisions, and flash procedures may change as the work lands upstream.
-    When this documentation and <a href="https://github.com/ldts/qcom-buildroot/blob/main/lemans.mk"><code>lemans.mk</code></a> disagree, trust the makefile.
+    When this documentation and a board makefile disagree, trust the makefile.
   </div>
+
+  <h2 id="boards">Boards</h2>
+  <table class="rtd-table">
+    <tr><th>Board</th><th>SoC</th><th>TZ stage</th><th>Makefile</th><th>Manifest</th><th>Start here</th></tr>
+    <tr><td><a href="iq-9075-evk.html">Qualcomm IQ-9075 EVK</a></td><td>Lemans (SA8775P / QCS9075)</td><td>U-Boot SPL</td>
+        <td><a href="https://github.com/ldts/qcom-buildroot/blob/main/lemans.mk"><code>lemans.mk</code></a></td><td><code>lemans.xml</code></td>
+        <td><a href="quick-start.html">Quick Start</a></td></tr>
+  </table>
+
+  <p>
+    Each board has a quick start that goes from an empty directory to a flashed
+    board. The concept pages describe what the boards share.
+  </p>
 
   <h2 id="contents">Contents</h2>
   <ul class="rtd-toctree">
     <li><a href="why.html">Why this Build System?<span class="sub">Speed · no Yocto · centralized manifest</span></a></li>
-    <li><a href="quick-start.html">Quick Start<span class="sub">repo init · sync · build · flash</span></a></li>
-    <li><a href="lemans-focused.html">Lemans — Focused<span class="sub">Platform · Boot · Projects</span></a></li>
-    <li><a href="lemans.html">Lemans — Comprehensive<span class="sub">Build System Deep Dive</span></a></li>
+  </ul>
+
+  <h3 id="concepts">Concepts, shared by all boards</h3>
+  <ul class="rtd-toctree">
+    <li><a href="toolchain.html">Host Setup<span class="sub">Packages · repo · toolchains · qdl</span></a></li>
+    <li><a href="build-system.html">Build System<span class="sub">Manifests · makefiles · images · targets</span></a></li>
+    <li><a href="signing.html">Signing<span class="sub">TZ stage · SWIV · qtestsign</span></a></li>
+    <li><a href="flashing.html">Flashing<span class="sub">EDL · qdl · partitions</span></a></li>
+  </ul>
+
+  <h3 id="iq-9075-evk">IQ-9075 EVK (Lemans)</h3>
+  <ul class="rtd-toctree">
+    <li><a href="iq-9075-evk.html">IQ-9075 EVK<span class="sub">Boot chain · build · flash</span></a></li>
+    <li><a href="quick-start.html">IQ-9075 EVK Quick Start<span class="sub">repo init · sync · build · flash</span></a></li>
+    <li><a href="lemans-focused.html">Lemans: Focused<span class="sub">Platform · Boot · Projects</span></a></li>
+    <li><a href="lemans.html">Lemans: Comprehensive<span class="sub">Build System Deep Dive</span></a></li>
   </ul>
 
   <footer style="text-align:center">
