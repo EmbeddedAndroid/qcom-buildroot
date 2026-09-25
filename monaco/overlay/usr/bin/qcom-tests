@@ -1,0 +1,141 @@
+#!/bin/sh
+# qcom-tests [choice...]: DSP bring-up checks for Monaco (QCS8300).
+#   1) ADSP FastRPC   fastrpc_test -d 0 -U 0
+#   2) CDSP FastRPC   fastrpc_test -d 3 -U 0
+#   3) GPDSP          remoteproc running and its FastRPC nodes present
+#   4) CPU stress     stress-ng on every CPU for STRESS_SECS (default 7200)
+#   5) CDSP FastRPC   fastrpc_test -d 3 -U 1 (unsigned PD)
+# Choices come from the arguments ("qcom-tests 1 2", "a" for all) or, with
+# none, from a menu. Prints PASS or FAIL per test and exits non-zero if any
+# failed.
+#
+# fastrpc_test cannot drive the GPDSP: its payload libraries accept only
+# domains 0 to 4 (ADSP, MDSP, SDSP, CDSP, CDSP1), so test 3 stops at the
+# boot state and the gdsp0 device nodes.
+#
+# The fastrpc_test skels are not among the binaries the DSP images carry
+# hashes for, so a signed PD (-U 0) loads them only on their own signature.
+# Test 5 runs them in an unsigned PD, which the CDSP allows, to tell a
+# signing failure from a DSP that is not up.
+
+STRESS_SECS="${STRESS_SECS:-7200}"
+
+pass=0
+fail=0
+
+run() {
+	name="$1"
+	shift
+	echo "=================================================================="
+	echo "[ RUN  ] $name"
+	if "$@"; then
+		echo "[ PASS ] $name"
+		pass=$((pass + 1))
+	else
+		echo "[ FAIL ] $name (exit $?)"
+		fail=$((fail + 1))
+	fi
+}
+
+# rproc <name>: print the state of remoteproc <name>, true if it is running.
+rproc() {
+	for r in /sys/class/remoteproc/remoteproc*; do
+		[ "$(cat $r/name 2>/dev/null)" = "$1" ] || continue
+		state=$(cat $r/state)
+		echo "remoteproc $1 ($(cat $r/firmware)): $state"
+		[ "$state" = running ]
+		return
+	done
+	echo "remoteproc $1: not registered"
+	return 1
+}
+
+test_adsp() {
+	rproc adsp && fastrpc_test -d 0 -U 0
+}
+
+test_cdsp() {
+	rproc cdsp && fastrpc_test -d 3 -U 0
+}
+
+test_cdsp_unsigned() {
+	rproc cdsp && fastrpc_test -d 3 -U 1
+}
+
+test_gpdsp() {
+	rproc gpdsp0 || return 1
+	ls -l /dev/fastrpc-gdsp0* 2>/dev/null || {
+		echo "no /dev/fastrpc-gdsp0 node"
+		return 1
+	}
+}
+
+# One line per minute: elapsed time, 1-minute load and every thermal zone.
+stress_heartbeat() {
+	temps=
+	for tz in /sys/class/thermal/thermal_zone*/temp; do
+		t=$(cat "$tz" 2>/dev/null) && temps="$temps $((t / 1000))C"
+	done
+	echo "[stress] $1s/${STRESS_SECS}s load:$(cut -d' ' -f1 /proc/loadavg) temps:${temps:- n/a}"
+}
+
+test_stress() {
+	ncpu=$(nproc)
+	echo "[stress] stress-ng --cpu $ncpu for ${STRESS_SECS}s"
+	stress-ng --cpu "$ncpu" --timeout "${STRESS_SECS}s" --tz --metrics --times &
+	stpid=$!
+	t=0
+	while [ "$t" -lt "$STRESS_SECS" ] && kill -0 "$stpid" 2>/dev/null; do
+		sleep 60
+		t=$((t + 60))
+		[ "$t" -gt "$STRESS_SECS" ] && t="$STRESS_SECS"
+		stress_heartbeat "$t"
+	done
+	wait "$stpid"
+}
+
+sel=" $* "
+if [ $# -eq 0 ]; then
+	echo "Select tests to run:"
+	echo "  1) ADSP FastRPC (-d 0 -U 0)"
+	echo "  2) CDSP FastRPC (-d 3 -U 0)"
+	echo "  3) GPDSP boot and FastRPC nodes"
+	echo "  4) CPU stress (${STRESS_SECS}s)"
+	echo "  5) CDSP FastRPC unsigned PD (-d 3 -U 1)"
+	echo "  a) all          q) quit"
+	printf "Choice> "
+	read -r sel || exit 0
+	sel=" $(printf '%s' "$sel" | tr ',' ' ') "
+	[ -z "$(printf '%s' "$sel" | tr -d ' ')" ] && sel=" a "
+fi
+
+chosen() {
+	case "$sel" in
+	*" $1 "* | *" a "* | *" all "*) return 0 ;;
+	esac
+	return 1
+}
+
+case "$sel" in
+*" q "*) exit 0 ;;
+esac
+for tok in $sel; do
+	case "$tok" in
+	1 | 2 | 3 | 4 | 5 | a | all) ;;
+	*) echo "qcom-tests: ignoring unknown choice '$tok'" >&2 ;;
+	esac
+done
+
+chosen 1 && run "1) ADSP FastRPC (-d 0 -U 0)" test_adsp
+chosen 2 && run "2) CDSP FastRPC (-d 3 -U 0)" test_cdsp
+chosen 3 && run "3) GPDSP boot and FastRPC nodes" test_gpdsp
+chosen 4 && run "4) CPU stress (${STRESS_SECS}s)" test_stress
+chosen 5 && run "5) CDSP FastRPC unsigned PD (-d 3 -U 1)" test_cdsp_unsigned
+
+if [ $((pass + fail)) -eq 0 ]; then
+	echo "qcom-tests: no valid tests selected" >&2
+	exit 1
+fi
+echo "=================================================================="
+echo "qcom-tests: $pass passed, $fail failed"
+[ "$fail" -eq 0 ]
