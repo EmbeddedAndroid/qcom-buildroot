@@ -161,12 +161,11 @@ qdl --storage emmc prog_firehose_ddr.elf write efi efi.bin</pre>
     runtime of that build under the Arduino Monza path the DT model maps to, and
     checks the pairing.
   </p>
-  <div class="rtd-warn">
-    The DSPs are started through the OP-TEE PAS service. Its Monaco support in
-    OP-TEE, and the TF-A clock setup it relies on, are not in the revisions
-    <code>monaco.xml</code> pins yet; until they are, the remoteprocs do not
-    start and <code>qcom-tests</code> reports them as not running.
-  </div>
+  <p>
+    The DSPs are started through the OP-TEE PAS service (the Monaco PAS
+    pseudo-TA, embedded as an early TA), which relies on the TF-A Monaco clock
+    setup; <code>monaco.xml</code> pins OP-TEE and TF-A revisions with both.
+  </p>
 
 </main>
 <script src="_rtd.js"></script>
