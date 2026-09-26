@@ -79,8 +79,8 @@ repo sync -j4 --no-clone-bundle</pre>
         <td><code>uefi.elf</code>: FIT image with BL31, OP-TEE and U-Boot proper, loaded by the SPL</td>
         <td><code>efi.bin</code>: FAT32 ESP with the UKI</td></tr>
     <tr><td>VENTUNO Q</td>
-        <td><code>tz.mbn</code>: TF-A BL2 with a SWIV segment, QTI signature</td>
-        <td><code>fip.elf</code>: FIP with BL31, OP-TEE and U-Boot in an ELF, qtestsign signature, loaded by XBL</td>
+        <td><code>tz.mbn</code>: TF-A BL2 (or U-Boot SPL with <code>TZ_IMAGE=u-boot-spl</code>) with a SWIV segment, QTI signature</td>
+        <td><code>fip.elf</code>: FIP with BL31, OP-TEE and U-Boot in an ELF, qtestsign signature, loaded by XBL (<code>uefi.elf</code>, a FIT, for SPL)</td>
         <td><code>efi.bin</code>: FAT32 ESP with the UKI</td></tr>
   </table>
   <p>

@@ -48,7 +48,7 @@
   <table class="rtd-table">
     <tr><th>Partition</th><th>Holds</th></tr>
     <tr><td><code>tz</code> (A/B: <code>tz_a</code>, <code>tz_b</code>)</td><td>The TZ stage (see <a href="signing.html">Signing</a>)</td></tr>
-    <tr><td><code>uefi</code> (A/B: <code>uefi_a</code>, <code>uefi_b</code>)</td><td>BL31, OP-TEE and U-Boot: a FIT the SPL reads (IQ-9075 EVK) or a FIP ELF XBL loads (VENTUNO Q)</td></tr>
+    <tr><td><code>uefi</code> (A/B: <code>uefi_a</code>, <code>uefi_b</code>)</td><td>BL31, OP-TEE and U-Boot: a FIT the SPL reads (IQ-9075 EVK) or an ELF XBL loads with the FIP, or a FIT for SPL (VENTUNO Q)</td></tr>
     <tr><td><code>efi</code></td><td>The ESP with the UKI (<code>efi.bin</code>)</td></tr>
   </table>
 

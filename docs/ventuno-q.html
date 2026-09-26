@@ -57,25 +57,38 @@
     <tr><td><code>efi.bin</code></td><td><code>efi</code></td><td>256 MiB FAT32 ESP with the UKI as <code>EFI/Linux/uki.efi</code> and <code>EFI/BOOT/bootaa64.efi</code>, formatted with 512-byte sectors (the eMMC block size)</td><td><code>make efi</code></td></tr>
   </table>
 
-  <h2 id="tz-stage">Why TF-A BL2 is the TZ stage</h2>
+  <h2 id="tz-stage">The TZ stage: TF-A BL2 or U-Boot SPL</h2>
   <p>
-    On the IQ-9075 EVK a U-Boot SPL signed with qtestsign is the TZ stage. That flow
-    does not carry over to Monaco, so BL2 is the TZ stage here:
+    TF-A BL2 is the TZ stage by default. <code>TZ_IMAGE=u-boot-spl</code> makes
+    U-Boot SPL the TZ stage instead, as on the IQ-9075 EVK. Pass the same
+    <code>TZ_IMAGE</code> to <code>bootimage</code>, <code>tz-sign</code> and
+    <code>flash-loader</code>:
   </p>
-  <ul>
-    <li>XBL checks the QTI signature of the TZ image even with secure boot
-      disabled; a qtestsign signature is not accepted (see
-      <a href="signing.html">Signing</a>). An SPL would need the same QTI
-      signing as BL2.</li>
-    <li>XBL enters the TZ image in system IMEM at <code>0x14680000</code>, where
-      the Monaco BL2 is linked, in a <code>0x1a000</code> byte region. The Lemans
-      SPL is linked at <code>0x1c100000</code> and loads its payload from UFS.</li>
-    <li>Neither upstream U-Boot nor the qualcomm-linux U-Boot tree the IQ-9075
-      EVK uses has an SPL configuration for Monaco.</li>
-  </ul>
+<pre>make bootimage TZ_IMAGE=u-boot-spl   # u-boot-spl.elf, uefi.elf
+make tz-sign TZ_IMAGE=u-boot-spl     # tz.mbn from u-boot-spl.elf
+make flash-loader TZ_IMAGE=u-boot-spl</pre>
   <p>
-    An SPL based TZ stage for Monaco needs a U-Boot SPL that runs from the IMEM
-    entry point and reads the FIT from eMMC; it is not available yet.
+    XBL loads the <code>uefi</code> image to <code>0xaf000000</code> before it
+    starts the TZ stage, so SPL needs no storage driver: it finds a FIT with BL31,
+    OP-TEE and U-Boot there (<code>monaco/uefi.its</code>, wrapped and signed like
+    the FIP ELF), loads the three images to the addresses in the table above and
+    starts BL31. TF-A is built as BL31 only.
+  </p>
+  <table class="rtd-table">
+    <tr><th></th><th><code>TZ_IMAGE=bl2</code> (default)</th><th><code>TZ_IMAGE=u-boot-spl</code></th></tr>
+    <tr><td>TZ image (<code>tz.mbn</code>)</td><td>TF-A BL2 (<code>bl2.elf</code>)</td><td>U-Boot SPL (<code>u-boot-spl.elf</code>, <code>qcom_monaco_spl_defconfig</code>)</td></tr>
+    <tr><td>uefi image</td><td><code>fip.elf</code>: FIP</td><td><code>uefi.elf</code>: FIT (<code>uefi.itb</code>)</td></tr>
+    <tr><td>TF-A build</td><td><code>bl2</code> and <code>fip</code></td><td><code>bl31</code></td></tr>
+  </table>
+  <p>
+    Unlike on the IQ-9075 EVK, the SPL needs a QTI signature, like BL2: XBL checks
+    the QTI signature of the TZ image even with secure boot disabled (see
+    <a href="signing.html">Signing</a>). SPL has to fit where XBL enters the TZ
+    image, <code>0x14680000</code> to <code>0x1469a000</code> in system IMEM, with
+    its BSS and stack; it prints its banner on the debug UART XBL leaves set up.
+    SPL needs a U-Boot tree with <code>qcom_monaco_spl_defconfig</code>, which the
+    tree <code>monaco.xml</code> pins does not have yet, and it has not been run
+    on a board yet.
   </p>
 
   <h2 id="sources">Sources</h2>
@@ -85,14 +98,15 @@
         (<a href="https://review.trustedfirmware.org/q/topic:qti-monaco">Gerrit topic qti-monaco</a>) on the hoya
         CPUCP start series (Gerrit 54862/54863), then the SAIL notification (Gerrit 54579) and patches not
         submitted yet: the VENTUNO Q reset fixes and the Monaco clock back-end and RPMh data the ADSP needs</td>
-        <td><code>PLAT=monza SPD=opteed</code>, <code>bl2</code> and <code>fip</code></td></tr>
+        <td><code>PLAT=monza SPD=opteed</code>, <code>bl2</code> and <code>fip</code> (<code>bl31</code> for SPL)</td></tr>
     <tr><td>OP-TEE</td><td>EmbeddedAndroid/optee_os, <code>ventuno-q</code>: Monaco platform support
         (<a href="https://github.com/OP-TEE/optee_os/pull/8053">optee_os pull request 8053</a>), then the Monaco
         PAS clocks and pseudo-TA that start the DSPs, not submitted yet</td>
         <td><code>PLATFORM=qcom-monaco</code>, log level 2 (prints the version)</td></tr>
     <tr><td>U-Boot</td><td>EmbeddedAndroid/u-boot, <code>monza</code>: the VENTUNO Q series, respun after its review
-        on the U-Boot list</td>
-        <td><code>qcom_defconfig</code> + <code>tfa-optee.config</code> + <code>arduino-ventuno-q.config</code></td></tr>
+        on the U-Boot list, then the Monaco SPL patches, not submitted yet</td>
+        <td><code>qcom_defconfig</code> + <code>tfa-optee.config</code> + <code>arduino-ventuno-q.config</code>;
+        SPL: <code>qcom_monaco_spl_defconfig</code></td></tr>
     <tr><td>Linux</td><td>EmbeddedAndroid/linux, <code>monza</code>: linux-next with Monaco and VENTUNO Q patches
         not submitted yet (see below)</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>

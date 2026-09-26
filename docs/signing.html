@@ -29,7 +29,7 @@
   <table class="rtd-table">
     <tr><th>Board</th><th>TZ stage</th><th>Loads the rest from</th></tr>
     <tr><td>IQ-9075 EVK</td><td>U-Boot SPL</td><td>The FIT image in the uefi partition (<code>SPL_LOAD_FIT</code>, <code>SPL_ATF</code>)</td></tr>
-    <tr><td>VENTUNO Q</td><td>TF-A BL2</td><td>The FIP, which XBL loads from the uefi partition (see <a href="ventuno-q.html#tz-stage">why BL2</a>)</td></tr>
+    <tr><td>VENTUNO Q</td><td>TF-A BL2, or U-Boot SPL with <code>TZ_IMAGE=u-boot-spl</code></td><td>The FIP, or for SPL a FIT, which XBL loads from the uefi partition (see <a href="ventuno-q.html#tz-stage">the TZ stage</a>)</td></tr>
   </table>
 
   <h2 id="swiv">SWIV segment</h2>
@@ -81,8 +81,8 @@
         <td>FIT image, unsigned; the SPL reads it from the partition</td>
         <td><code>make spl</code> (part of <code>make bootimage</code>)</td></tr>
     <tr><td>VENTUNO Q</td>
-        <td>TF-A BL2 + SWIV, QTI signature (<code>sectools</code>, QTI remote signing)</td>
-        <td>FIP in an ELF, qtestsign (<code>-v6 aboot</code>, by TF-A's <code>generate_fip_elf.sh</code>); XBL loads it</td>
+        <td>TF-A BL2 or U-Boot SPL + SWIV, QTI signature (<code>sectools</code>, QTI remote signing)</td>
+        <td>FIP, or FIT for SPL, in an ELF, qtestsign (<code>-v6 aboot</code>, by TF-A's <code>generate_fip_elf.sh</code>); XBL loads it</td>
         <td><code>make tz-sign</code>; the uefi image is signed by <code>make bootimage</code></td></tr>
   </table>
 
