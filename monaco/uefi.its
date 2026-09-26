@@ -1,0 +1,58 @@
+/*
+ * uefi partition image for TZ_IMAGE=u-boot-spl: XBL loads it to 0xaf000000
+ * and U-Boot SPL loads its images from there. The load addresses are the
+ * TF-A BL31_BASE, BL32_BASE and BL33_BASE of PLAT=monza. U-Boot comes
+ * before OP-TEE in loadables: SPL records the entry points it passes to BL31
+ * only once it has loaded an image that takes a device tree.
+ */
+/dts-v1/;
+
+/ {
+	description = "Arduino VENTUNO Q: TF-A BL31, OP-TEE and U-Boot";
+	#address-cells = <1>;
+
+	images {
+		atf {
+			description = "TF-A BL31";
+			data = /incbin/("bl31.bin");
+			type = "firmware";
+			arch = "arm64";
+			os = "arm-trusted-firmware";
+			compression = "none";
+			load = <0x1c200000>;
+			entry = <0x1c200000>;
+		};
+
+		uboot {
+			description = "U-Boot";
+			data = /incbin/("u-boot.bin");
+			type = "firmware";
+			arch = "arm64";
+			os = "u-boot";
+			compression = "none";
+			load = <0xaf400000>;
+			entry = <0xaf400000>;
+		};
+
+		tee {
+			description = "OP-TEE";
+			data = /incbin/("tee-raw.bin");
+			type = "tee";
+			arch = "arm64";
+			os = "tee";
+			compression = "none";
+			load = <0x1c300000>;
+			entry = <0x1c300000>;
+		};
+	};
+
+	configurations {
+		default = "conf";
+
+		conf {
+			description = "TF-A BL31, OP-TEE and U-Boot";
+			firmware = "atf";
+			loadables = "uboot", "tee";
+		};
+	};
+};
