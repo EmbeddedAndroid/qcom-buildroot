@@ -82,22 +82,35 @@
   <table class="rtd-table">
     <tr><th>Tree</th><th>Repository (monaco.xml)</th><th>Build</th></tr>
     <tr><td>TF-A</td><td>EmbeddedAndroid/arm-trusted-firmware, <code>monza</code>: the Monaco series under review
-        (<a href="https://review.trustedfirmware.org/q/topic:qti-monaco">Gerrit topic qti-monaco</a>)</td>
+        (<a href="https://review.trustedfirmware.org/q/topic:qti-monaco">Gerrit topic qti-monaco</a>) on the hoya
+        CPUCP start series (Gerrit 54862/54863), then the SAIL notification (Gerrit 54579) and patches not
+        submitted yet: the VENTUNO Q reset fixes and the Monaco clock back-end and RPMh data the ADSP needs</td>
         <td><code>PLAT=monza SPD=opteed</code>, <code>bl2</code> and <code>fip</code></td></tr>
-    <tr><td>OP-TEE</td><td>EmbeddedAndroid/optee_os, <code>monza</code>: Monaco platform support
-        (<a href="https://github.com/OP-TEE/optee_os/pull/8053">optee_os pull request 8053</a>)</td>
+    <tr><td>OP-TEE</td><td>EmbeddedAndroid/optee_os, <code>ventuno-q</code>: Monaco platform support
+        (<a href="https://github.com/OP-TEE/optee_os/pull/8053">optee_os pull request 8053</a>), then the Monaco
+        PAS clocks and pseudo-TA that start the DSPs, not submitted yet</td>
         <td><code>PLATFORM=qcom-monaco</code>, log level 2 (prints the version)</td></tr>
-    <tr><td>U-Boot</td><td>EmbeddedAndroid/u-boot, <code>monza</code>: the VENTUNO Q series sent to the U-Boot list</td>
+    <tr><td>U-Boot</td><td>EmbeddedAndroid/u-boot, <code>monza</code>: the VENTUNO Q series, respun after its review
+        on the U-Boot list</td>
         <td><code>qcom_defconfig</code> + <code>tfa-optee.config</code> + <code>arduino-ventuno-q.config</code></td></tr>
-    <tr><td>Linux</td><td>Mainline, <code>v7.3-rc4</code></td>
+    <tr><td>Linux</td><td>EmbeddedAndroid/linux, <code>monza</code>: linux-next with Monaco and VENTUNO Q patches
+        not submitted yet (see below)</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>
   </table>
   <p>
-    The kernel needs no patches for the VENTUNO Q: the board device tree
-    (<code>monaco-arduino-monza.dts</code>) is in mainline since v7.1, as is the
-    Monaco EL2 overlay (<code>monaco-el2.dtso</code>). The kernel has no combined
-    EL2 DTB for this board, so <code>monaco.mk</code> builds the board DTB with
-    symbols and applies the overlay with the kernel's <code>fdtoverlay</code>.
+    The board device tree (<code>monaco-arduino-monza.dts</code>) is in mainline
+    since v7.1, as is the Monaco EL2 overlay (<code>monaco-el2.dtso</code>). The
+    kernel has no combined EL2 DTB for this board, so <code>monaco.mk</code> builds
+    the board DTB with symbols and applies the overlay with the kernel's
+    <code>fdtoverlay</code>.
+  </p>
+  <p>
+    The pinned kernel carries patches that are not submitted yet: DSP (PAS)
+    start without a resource table, audio recovery across an ADSP restart,
+    the fixes for booting with <code>maxcpus</code>, and two PCIe fixes for
+    the PI7C9X2G304 switch on PCIe0: L1 PM Substates disabled on the root
+    port link (config reads to the switch could stall a CPU) and the switch's
+    Training Error masked (it made AER reset the TUSB7340 link in a loop).
   </p>
 
   <h3 id="boot-cpu">Boot CPU</h3>
@@ -150,7 +163,7 @@ make flash-kernel    # efi &lt;- efi.bin</pre>
     write uefi_a fip.elf write uefi_b fip.elf
 qdl --storage emmc prog_firehose_ddr.elf write efi efi.bin</pre>
 
-  <h2 id="dsp">DSPs</h2>
+  <h2 id="dsp">DSPs and audio</h2>
   <p>
     The rootfs carries the ADSP, CDSP and GPDSP firmware from linux-firmware
     (<code>qcom/qcs8300</code>), the FastRPC userspace and runtime, and
@@ -166,6 +179,15 @@ qdl --storage emmc prog_firehose_ddr.elf write efi efi.bin</pre>
     pseudo-TA, embedded as an early TA), which relies on the TF-A Monaco clock
     setup; <code>monaco.xml</code> pins OP-TEE and TF-A revisions with both.
   </p>
+  <p>
+    The sound card, ALSA id <code>arduinomonza</code> (card 1; the loopback
+    card is card 0), runs on the ADSP with the AudioReach topology from
+    linux-firmware. Playback on the headphone output needs the route the
+    upstream UCM profile sets:
+  </p>
+<pre>amixer -c arduinomonza cset name='LPI_MI2S_RX_0 Audio Mixer MultiMedia1' on
+amixer -c arduinomonza cset name='Headphone Switch' on
+aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
 
 </main>
 <script src="_rtd.js"></script>
