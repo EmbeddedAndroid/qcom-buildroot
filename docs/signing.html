@@ -29,6 +29,7 @@
   <table class="rtd-table">
     <tr><th>Board</th><th>TZ stage</th><th>Loads the rest from</th></tr>
     <tr><td>IQ-9075 EVK</td><td>U-Boot SPL</td><td>The FIT image in the uefi partition (<code>SPL_LOAD_FIT</code>, <code>SPL_ATF</code>)</td></tr>
+    <tr><td>VENTUNO Q</td><td>TF-A BL2, or U-Boot SPL with <code>TZ_IMAGE=u-boot-spl</code></td><td>The FIP, or for SPL a FIT, which XBL loads from the uefi partition (see <a href="ventuno-q.html#tz-stage">the TZ stage</a>)</td></tr>
   </table>
 
   <h2 id="swiv">SWIV segment</h2>
@@ -41,6 +42,7 @@
   <table class="rtd-table">
     <tr><th>Chipset argument</th><th>SWIV segment address</th></tr>
     <tr><td><code>lemans</code></td><td><code>0x1c042000</code></td></tr>
+    <tr><td><code>monaco</code></td><td><code>0x1c041000</code> (as in the QCS8300 TZ release image)</td></tr>
   </table>
 
   <h2 id="qtestsign">qtestsign</h2>
@@ -51,6 +53,26 @@
     next to <code>build/</code> the first time it is needed.
   </p>
 
+  <h2 id="qti-signing">QTI signing</h2>
+  <p>
+    On Monaco, XBL checks the TZ image against the QTI root as well as the OEM
+    root even with secure boot disabled, so a qtestsign signature is rejected
+    there. The image has to be signed as a TZ image with a QTI signature, which
+    Qualcomm <code>sectools</code> produces through the QTI remote signing
+    service (CASS), using the SoC's TZ security profile from the Qualcomm signing
+    package. <code>monaco.mk</code> does this in <code>make tz-qti-sign</code>; none of
+    it is needed to build, only to make <code>tz.mbn</code>:
+  </p>
+<pre>make tz-qti-sign SECTOOLS=&lt;sectools&gt; QTI_SIGN_DIR=&lt;dir with monaco_tz_security_profile.xml&gt; \
+     CASS_CAPABILITY=&lt;capability&gt; \
+     QTI_SIGN_SERVER_URL=&lt;server URL&gt; QTI_SIGN_SERVER_PORT=&lt;port&gt;</pre>
+  <p>
+    It runs the SWIV tool, <code>sectools secure-image --image-id TZ --qti --sign
+    --signing-mode QTI-REMOTE</code>, then validates the result. XBL does not
+    boot a TZ image without this signature, so <code>tz.mbn</code> has to be
+    signed this way before flashing.
+  </p>
+
   <h2 id="per-board">What each board needs</h2>
   <table class="rtd-table">
     <tr><th>Board</th><th>TZ image</th><th>uefi image</th><th>Target</th></tr>
@@ -58,6 +80,10 @@
         <td>U-Boot SPL + SWIV, qtestsign (<code>-v6 tz</code>)</td>
         <td>FIT image, unsigned; the SPL reads it from the partition</td>
         <td><code>make spl</code> (part of <code>make bootimage</code>)</td></tr>
+    <tr><td>VENTUNO Q</td>
+        <td>TF-A BL2 or U-Boot SPL + SWIV, QTI signature (<code>sectools</code>, QTI remote signing)</td>
+        <td>FIP, or FIT for SPL, in an ELF, qtestsign (<code>-v6 aboot</code>, by TF-A's <code>generate_fip_elf.sh</code>); XBL loads it</td>
+        <td><code>make tz-qti-sign</code>; the uefi image is signed by <code>make bootimage</code></td></tr>
   </table>
 
 </main>
