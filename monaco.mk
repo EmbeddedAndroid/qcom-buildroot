@@ -45,6 +45,10 @@
 #   flash-loader   write tz.mbn to tz_a/tz_b and the uefi image to
 #                  uefi_a/uefi_b
 #   flash-kernel   write efi.bin to efi
+#   yocto          the Yocto BSP image (meta-qcom-arduino, ventuno-q)
+#   flash-yocto    write the complete Yocto image to the eMMC
+#   efi-kernel-only
+#                  efi.bin with this kernel for the Yocto rootfs
 #   clean          clean all components and monaco/output/
 #
 # Component targets: optee-os, u-boot, u-boot-spl, tfa, fip, uefi, linux,
@@ -208,6 +212,10 @@ help:
 	@echo "  efi            monaco/output/efi.bin (kernel UKI + Buildroot rootfs)"
 	@echo "  flash-loader   write tz.mbn and fip.elf or uefi.elf over qdl (board in EDL)"
 	@echo "  flash-kernel   write efi.bin over qdl (board in EDL)"
+	@echo "  yocto          the Yocto BSP image (meta-qcom-arduino, ventuno-q)"
+	@echo "  flash-yocto    write the complete Yocto image over qdl (board in EDL)"
+	@echo "  efi-kernel-only"
+	@echo "                 monaco/output/efi.bin with this kernel for the Yocto rootfs"
 	@echo "  clean          clean all components and monaco/output/"
 	@echo ""
 	@echo "Component targets: optee-os u-boot u-boot-spl tfa fip uefi linux"
@@ -217,7 +225,7 @@ help:
 	@echo "Variables: BUILD_ID TZ_IMAGE TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS"
 	@echo "  U_BOOT_SPL_CONFIG LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS;"
 	@echo "  tz-qti-sign: SECTOOLS QTI_SIGN_DIR SECURITY_PROFILE CASS_CAPABILITY"
-	@echo "  QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT"
+	@echo "  QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT; yocto: KAS META_QCOM_ARDUINO_REV"
 
 ################################################################################
 # OP-TEE OS (BL32)
@@ -696,3 +704,67 @@ flash-kernel:
 	@[ -f $(MONACO_OUT)/efi.bin ] || \
 		{ echo "ERROR: monaco/output/efi.bin missing: run 'make efi' first"; exit 1; }
 	$(QDL) $(QDL_FLAGS) $(FIREHOSE) write efi $(MONACO_OUT)/efi.bin
+
+################################################################################
+# yocto, flash-yocto: the Yocto BSP image for the board, the reference software
+#
+# yocto builds the ventuno-q machine of meta-qcom-arduino (the Arduino board
+# layer on top of meta-qcom) with kas; KAS=kas-container builds in a
+# container. flash-yocto writes the complete image (boot firmware, CDT,
+# partition table, efi and rootfs) to the eMMC. flash-loader then puts the
+# open boot stack in tz and uefi and leaves the Yocto kernel and rootfs in
+# place; flash-kernel replaces efi with the UKI.
+################################################################################
+KAS                   ?= kas
+META_QCOM_ARDUINO_URL ?= https://github.com/qualcomm-linux/meta-qcom-arduino
+META_QCOM_ARDUINO_REV ?= bd88a3c1575ebfbeecae53bbe52b71bfeb5c652f
+META_QCOM_ARDUINO_DIR ?= $(CURDIR)/yocto/meta-qcom-arduino
+YOCTO_MACHINE          = ventuno-q
+YOCTO_DEPLOY           = $(CURDIR)/yocto/build/tmp/deploy/images/$(YOCTO_MACHINE)
+YOCTO_FLASH            = $(YOCTO_DEPLOY)/core-image-base-$(YOCTO_MACHINE).rootfs.qcomflash
+
+.PHONY: yocto flash-yocto yocto-clean
+
+yocto:
+	@echo "Building the Yocto BSP image; this takes hours."
+	@[ -d $(META_QCOM_ARDUINO_DIR) ] || \
+		git clone $(META_QCOM_ARDUINO_URL) $(META_QCOM_ARDUINO_DIR)
+	git -C $(META_QCOM_ARDUINO_DIR) checkout -q $(META_QCOM_ARDUINO_REV)
+	KAS_WORK_DIR=$(CURDIR)/yocto KAS_BUILD_DIR=$(CURDIR)/yocto/build \
+		$(KAS) build $(META_QCOM_ARDUINO_DIR)/ci/$(YOCTO_MACHINE).yml
+	@echo "Flash image: $(YOCTO_FLASH)"
+
+flash-yocto:
+	@[ -f $(YOCTO_FLASH)/prog_firehose_ddr.elf ] || \
+		{ echo "ERROR: $(YOCTO_FLASH) missing: run 'make yocto' first"; exit 1; }
+	cd $(YOCTO_FLASH) && \
+		$(QDL) $(QDL_FLAGS) prog_firehose_ddr.elf rawprogram*.xml patch*.xml
+
+# efi-kernel-only: an efi.bin that boots this kernel, with the EL2 DTB, on the
+# rootfs flash-yocto wrote. It copies the Yocto efi.bin and replaces its UKI;
+# flash-kernel writes it.
+YOCTO_ROOTFS_CMDLINE ?= root=PARTLABEL=rootfs rw rootwait \
+			$(filter-out root=% rw,$(LINUX_CMDLINE))
+
+.PHONY: efi-kernel-only
+
+efi-kernel-only: linux | $(MONACO_OUT)
+	@[ -f $(YOCTO_FLASH)/efi.bin ] || \
+		{ echo "ERROR: $(YOCTO_FLASH)/efi.bin missing: run 'make yocto' first"; exit 1; }
+	rm -f $(MONACO_OUT)/uki.efi $(MONACO_OUT)/efi.bin
+	ukify build \
+		--linux=$(LINUX_IMAGE) \
+		--cmdline='$(YOCTO_ROOTFS_CMDLINE)' \
+		--efi-arch=aa64 \
+		--stub=$(CURDIR)/qcom/ukify/linuxaa64.efi.stub \
+		--os-release=@/etc/os-release \
+		--devicetree=$(LINUX_DTB) \
+		--output=$(MONACO_OUT)/uki.efi
+	cp $(YOCTO_FLASH)/efi.bin $(MONACO_OUT)/efi.bin
+	mdeltree -i $(MONACO_OUT)/efi.bin ::/EFI/Linux
+	mmd -i $(MONACO_OUT)/efi.bin ::/EFI/Linux
+	mcopy -i $(MONACO_OUT)/efi.bin $(MONACO_OUT)/uki.efi ::/EFI/Linux/uki.efi
+	$(call record,efi.bin)
+
+yocto-clean:
+	rm -rf $(CURDIR)/yocto
