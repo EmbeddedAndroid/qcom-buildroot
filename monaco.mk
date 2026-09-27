@@ -1,25 +1,34 @@
 ################################################################################
 # monaco.mk: build system for the Arduino VENTUNO Q (Qualcomm QCS8275, Monaco)
 #
-# Boot sequence: XBL -> TF-A BL2 -> TF-A BL31 -> OP-TEE -> U-Boot -> Linux
-# XBL loads TF-A BL2 from the tz partition and the FIP from the uefi
-# partition; BL2 loads BL31, OP-TEE (BL32) and U-Boot (BL33) from the FIP.
+# Boot sequence: XBL -> TZ stage -> TF-A BL31 -> OP-TEE -> U-Boot -> Linux
+# XBL loads the TZ stage from the tz partition and the uefi partition image
+# to DDR at 0xaf000000, then starts the TZ stage at EL3. TZ_IMAGE selects it:
+#   bl2         TF-A BL2 (default). The uefi image holds the FIP; BL2 loads
+#               BL31, OP-TEE (BL32) and U-Boot (BL33) from it.
+#   u-boot-spl  U-Boot SPL. The uefi image holds a FIT with the same three
+#               images; SPL loads them and starts BL31.
 # U-Boot boots the UKI on the ESP (efi partition) through UEFI.
 #
 # Outputs, in monaco/output/:
-#   bl2.elf     TF-A BL2, the TZ image before signing
-#   tz.mbn      bl2.elf with a SWIV segment and a QTI signature (tz-qti-sign),
-#               flashed to tz_a and tz_b
+#   bl2.elf     TF-A BL2, the TZ image before signing (TZ_IMAGE=bl2)
+#   u-boot-spl.elf
+#               U-Boot SPL, the TZ image before signing (TZ_IMAGE=u-boot-spl)
+#   tz.mbn      the TZ image with a SWIV segment and a QTI signature
+#               (tz-qti-sign), flashed to tz_a and tz_b
 #   fip.elf     FIP (BL31 + OP-TEE + U-Boot) wrapped in an ELF loaded at
 #               0xaf000000 with a qtestsign test signature, flashed to
-#               uefi_a and uefi_b
+#               uefi_a and uefi_b (TZ_IMAGE=bl2)
+#   uefi.elf    FIT (BL31 + OP-TEE + U-Boot) wrapped the same way, flashed
+#               to uefi_a and uefi_b (TZ_IMAGE=u-boot-spl)
 #   efi.bin     FAT32 ESP holding the UKI (kernel, DTB and the Buildroot
 #               initramfs), flashed to efi
 #
 # XBL authenticates the TZ image with the QTI authenticator even when secure
-# boot is disabled, so a qtestsign signature is not accepted for tz.mbn.
-# tz-qti-sign signs bl2.elf through the QTI remote signing service (CASS); without
-# access to it, place a signed tz.mbn in monaco/input/ (see its README.md).
+# boot is disabled, so a qtestsign signature is not accepted for tz.mbn,
+# whether it holds BL2 or SPL. tz-qti-sign signs the TZ image through the QTI
+# remote signing service (CASS); without access to it, place a signed tz.mbn
+# in monaco/input/ (see its README.md).
 #
 # Every invocation stamps BUILD_ID into each component it builds: the TF-A
 # build string, the OP-TEE version, the U-Boot and Linux versions and the
@@ -29,22 +38,28 @@
 # Main targets
 # -----------------------------------------------------------------------------
 #   all            bootimage and efi
-#   bootimage      bl2.elf and fip.elf (OP-TEE, U-Boot, TF-A)
-#   tz-qti-sign    tz.mbn from bl2.elf (QTI remote signing, see above)
+#   bootimage      the TZ image and the uefi image (OP-TEE, U-Boot, TF-A):
+#                  bl2.elf and fip.elf, or u-boot-spl.elf and uefi.elf
+#   tz-qti-sign    tz.mbn from the TZ image (QTI remote signing, see above)
 #   efi            efi.bin (Linux, Buildroot, UKI)
-#   flash-loader   write tz.mbn to tz_a/tz_b and fip.elf to uefi_a/uefi_b
+#   flash-loader   write tz.mbn to tz_a/tz_b and the uefi image to
+#                  uefi_a/uefi_b
 #   flash-kernel   write efi.bin to efi
 #   clean          clean all components and monaco/output/
 #
-# Component targets: optee-os, u-boot, tfa, fip, linux, linux-defconfig,
-# buildroot, dsp-firmware, qtestsign-fetch, and the matching *-clean targets.
+# Component targets: optee-os, u-boot, u-boot-spl, tfa, fip, uefi, linux,
+# linux-defconfig, buildroot, dsp-firmware, qtestsign-fetch, and the matching
+# *-clean targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
 #   BUILD_ID          build identifier (default: monaco-<UTC date-time>)
+#   TZ_IMAGE          TZ stage: bl2 (default) or u-boot-spl; pass the same
+#                     value to bootimage, tz-qti-sign and flash-loader
 #   TF_A_FLAGS        TF-A make flags (default: PLAT=monza SPD=opteed)
 #   TF_A_DEBUG        1 for a TF-A debug build (default: 0)
 #   U_BOOT_CONFIGS    U-Boot defconfig and config fragments
+#   U_BOOT_SPL_CONFIG U-Boot SPL defconfig (default: qcom_monaco_spl_defconfig)
 #   LINUX_DEFCONFIG   kernel defconfig (default: defconfig)
 #   LINUX_CMDLINE     kernel command line embedded in the UKI
 #   FIREHOSE          eMMC firehose programmer used by the flash targets
@@ -74,6 +89,17 @@ endif
 MONACO_OUT = $(CURDIR)/monaco/output
 MONACO_IN  = $(CURDIR)/monaco/input
 BUILD_INFO = $(MONACO_OUT)/build-info.txt
+
+# TZ stage (see the top of this file) and the uefi image that goes with it.
+TZ_IMAGE ?= bl2
+ifeq ($(TZ_IMAGE),bl2)
+UEFI_IMAGE = fip.elf
+else ifeq ($(TZ_IMAGE),u-boot-spl)
+UEFI_IMAGE = uefi.elf
+else
+$(error TZ_IMAGE must be bl2 or u-boot-spl)
+endif
+TZ_ELF = $(TZ_IMAGE).elf
 
 ################################################################################
 # OP-TEE OS settings
@@ -146,8 +172,8 @@ all: bootimage efi
 
 clean: optee-os-clean u-boot-clean tfa-clean linux-clean buildroot-clean dsp-firmware-clean
 	rm -f $(MONACO_OUT)/*.elf $(MONACO_OUT)/*.mbn $(MONACO_OUT)/*.bin \
-	      $(MONACO_OUT)/*.efi $(MONACO_OUT)/*.dtb $(BUILD_INFO) \
-	      $(MONACO_OUT)/SHA256SUMS
+	      $(MONACO_OUT)/*.efi $(MONACO_OUT)/*.dtb $(MONACO_OUT)/*.itb \
+	      $(BUILD_INFO) $(MONACO_OUT)/SHA256SUMS
 
 $(MONACO_OUT):
 	mkdir -p $@
@@ -158,37 +184,47 @@ define record
 	touch $(BUILD_INFO)
 	sed -i '/^$(1) /d' $(BUILD_INFO)
 	echo "$(1) $(BUILD_ID)" >> $(BUILD_INFO)
-	cd $(MONACO_OUT) && sha256sum $$(ls bl2.elf tz.mbn fip.elf efi.bin 2>/dev/null) > SHA256SUMS
+	$(sha256sums)
 endef
+
+OUTPUT_FILES = bl2.elf u-boot-spl.elf tz.mbn fip.elf uefi.itb uefi.elf efi.bin
+sha256sums = cd $(MONACO_OUT) && sha256sum $$(ls $(OUTPUT_FILES) 2>/dev/null) > SHA256SUMS
+
+# id-of <output>: the BUILD_ID build-info.txt records for an output
+id-of = $$(sed -n 's/^$(1) //p' $(BUILD_INFO))
 
 .PHONY: help
 help:
 	@echo "Arduino VENTUNO Q (Qualcomm QCS8275, Monaco) build system"
 	@echo ""
-	@echo "Boot flow: XBL -> TF-A BL2 (tz.mbn) -> BL31 -> OP-TEE -> U-Boot -> Linux"
+	@echo "Boot flow: XBL -> TF-A BL2 or U-Boot SPL (tz.mbn) -> BL31 -> OP-TEE"
+	@echo "  -> U-Boot -> Linux (TZ_IMAGE=bl2, the default, or TZ_IMAGE=u-boot-spl)"
 	@echo ""
 	@echo "Main targets:"
 	@echo "  all            bootimage and efi"
-	@echo "  bootimage      monaco/output/bl2.elf and fip.elf (uefi partitions)"
-	@echo "  tz-qti-sign    monaco/output/tz.mbn from bl2.elf (QTI remote signing)"
+	@echo "  bootimage      monaco/output/bl2.elf and fip.elf, or with"
+	@echo "                 TZ_IMAGE=u-boot-spl u-boot-spl.elf and uefi.elf"
+	@echo "  tz-qti-sign    monaco/output/tz.mbn from the TZ image (QTI remote signing)"
 	@echo "  efi            monaco/output/efi.bin (kernel UKI + Buildroot rootfs)"
-	@echo "  flash-loader   write tz.mbn and fip.elf over qdl (board in EDL)"
+	@echo "  flash-loader   write tz.mbn and fip.elf or uefi.elf over qdl (board in EDL)"
 	@echo "  flash-kernel   write efi.bin over qdl (board in EDL)"
 	@echo "  clean          clean all components and monaco/output/"
 	@echo ""
-	@echo "Component targets: optee-os u-boot tfa fip linux linux-defconfig"
-	@echo "  buildroot dsp-firmware qtestsign-fetch, and the matching *-clean targets"
+	@echo "Component targets: optee-os u-boot u-boot-spl tfa fip uefi linux"
+	@echo "  linux-defconfig buildroot dsp-firmware qtestsign-fetch, and the"
+	@echo "  matching *-clean targets"
 	@echo ""
-	@echo "Variables: BUILD_ID TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS LINUX_DEFCONFIG"
-	@echo "  LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS; tz-qti-sign: SECTOOLS QTI_SIGN_DIR"
-	@echo "  SECURITY_PROFILE CASS_CAPABILITY QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT"
+	@echo "Variables: BUILD_ID TZ_IMAGE TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS"
+	@echo "  U_BOOT_SPL_CONFIG LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS;"
+	@echo "  tz-qti-sign: SECTOOLS QTI_SIGN_DIR SECURITY_PROFILE CASS_CAPABILITY"
+	@echo "  QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT"
 
 ################################################################################
 # OP-TEE OS (BL32)
 ################################################################################
 .PHONY: optee-os optee-os-clean
 
-# Raw OP-TEE image, loaded by BL2 from the FIP.
+# Raw OP-TEE image, loaded by BL2 from the FIP or by SPL from the FIT.
 BL32_BIN = $(OPTEE_OS_PATH)/out/arm/core/tee-raw.bin
 
 optee-os: optee-os-common
@@ -221,7 +257,39 @@ u-boot-clean:
 	rm -rf $(U_BOOT_OUTPUT)
 
 ################################################################################
-# TF-A: BL2 (the TZ image) and the FIP (BL31 + BL32 + BL33)
+# U-Boot SPL (TZ_IMAGE=u-boot-spl): the TZ image. XBL starts it at EL3 at
+# TZ_ENTRY in system IMEM, where TF-A BL2 runs otherwise. SPL loads BL31,
+# OP-TEE and U-Boot from the FIT XBL has loaded from the uefi partition (see
+# uefi) and starts BL31. spl/u-boot-spl.elf is SPL with its device tree,
+# wrapped as an ELF for XBL.
+################################################################################
+U_BOOT_SPL_CONFIG ?= qcom_monaco_spl_defconfig
+U_BOOT_SPL_OUTPUT  = $(UBOOT_PATH)/.output-monaco-spl
+U_BOOT_SPL_FLAGS   = -C $(UBOOT_PATH) O=$(U_BOOT_SPL_OUTPUT) \
+		     CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
+TZ_ENTRY           = 0x14680000
+
+.PHONY: u-boot-spl u-boot-spl-clean
+
+u-boot-spl: | $(MONACO_OUT)
+	mkdir -p $(U_BOOT_SPL_OUTPUT)
+	$(MAKE) $(U_BOOT_SPL_FLAGS) $(U_BOOT_SPL_CONFIG)
+	$(MAKE) $(U_BOOT_SPL_FLAGS) -j$(shell nproc) LOCALVERSION=-$(BUILD_ID) \
+		spl/u-boot-spl.elf
+	$(AARCH64_CROSS_COMPILE)readelf -h $(U_BOOT_SPL_OUTPUT)/spl/u-boot-spl.elf | \
+		grep -q 'Entry point address: *$(TZ_ENTRY)$$' || \
+		{ echo "ERROR: u-boot-spl.elf does not start at $(TZ_ENTRY)"; exit 1; }
+	cp $(U_BOOT_SPL_OUTPUT)/spl/u-boot-spl.elf $(MONACO_OUT)/u-boot-spl.elf
+	grep -aq '$(BUILD_ID)' $(MONACO_OUT)/u-boot-spl.elf || \
+		{ echo "ERROR: u-boot-spl.elf lacks $(BUILD_ID)"; exit 1; }
+	$(call record,u-boot-spl.elf)
+
+u-boot-spl-clean:
+	rm -rf $(U_BOOT_SPL_OUTPUT)
+
+################################################################################
+# TF-A: BL2 (the TZ image) and the FIP (BL31 + BL32 + BL33), or with
+# TZ_IMAGE=u-boot-spl only BL31, which SPL starts
 ################################################################################
 TF_A_FLAGS ?= PLAT=monza SPD=opteed
 TF_A_DEBUG ?= 0
@@ -231,6 +299,7 @@ TF_A_BUILD  = $(TF_A_PATH)/build/monza/$(if $(filter 1,$(TF_A_DEBUG)),debug,rele
 
 # TF-A does not rebuild when only BUILD_STRING changes; drop the objects that
 # embed it so each build carries its own BUILD_ID.
+ifeq ($(TZ_IMAGE),bl2)
 tfa: optee-os u-boot | $(MONACO_OUT)
 	rm -f $(TF_A_BUILD)/bl2/bl_common.o $(TF_A_BUILD)/bl2/bl2_main.o \
 	      $(TF_A_BUILD)/bl31/bl_common.o $(TF_A_BUILD)/bl31/bl31_main.o
@@ -242,6 +311,15 @@ tfa: optee-os u-boot | $(MONACO_OUT)
 	grep -aq '$(BUILD_ID)' $(MONACO_OUT)/bl2.elf || \
 		{ echo "ERROR: bl2.elf lacks $(BUILD_ID)"; exit 1; }
 	$(call record,bl2.elf)
+else
+tfa: | $(MONACO_OUT)
+	rm -f $(TF_A_BUILD)/bl31/bl_common.o $(TF_A_BUILD)/bl31/bl31_main.o
+	CROSS_COMPILE="$(AARCH64_CROSS_COMPILE)" $(MAKE) -C $(TF_A_PATH) \
+		-j$(shell nproc) $(TF_A_FLAGS) DEBUG=$(TF_A_DEBUG) \
+		BUILD_STRING=$(BUILD_ID) bl31
+	grep -aq '$(BUILD_ID)' $(TF_A_BUILD)/bl31.bin || \
+		{ echo "ERROR: bl31.bin lacks $(BUILD_ID)"; exit 1; }
+endif
 
 tfa-clean:
 	CROSS_COMPILE="$(AARCH64_CROSS_COMPILE)" $(MAKE) -C $(TF_A_PATH) \
@@ -257,7 +335,7 @@ QTESTSIGN_PATH ?= $(ROOT)/qtestsign
 FIP_LOAD_ADDR  ?= 0xaf000000
 FIP_WORK        = $(MONACO_OUT)/.fip
 
-.PHONY: qtestsign-fetch fip
+.PHONY: qtestsign-fetch fip uefi
 
 qtestsign-fetch:
 	@if [ ! -d $(QTESTSIGN_PATH) ]; then \
@@ -265,6 +343,7 @@ qtestsign-fetch:
 		git clone https://github.com/msm8916-mainline/qtestsign $(QTESTSIGN_PATH); \
 	fi
 
+ifeq ($(TZ_IMAGE),bl2)
 fip: tfa qtestsign-fetch
 	rm -rf $(FIP_WORK) && mkdir -p $(FIP_WORK)
 	ln -s $(QTESTSIGN_PATH) $(FIP_WORK)/qtestsign
@@ -277,14 +356,55 @@ fip: tfa qtestsign-fetch
 		{ echo "ERROR: fip.elf lacks $(BUILD_ID) in BL31, OP-TEE or U-Boot"; exit 1; }
 	$(call record,fip.elf)
 
-# A tz.mbn signed from an earlier bl2.elf no longer matches; tz-qti-sign makes a
-# new one.
-bootimage: fip
+uefi:
+	@echo "ERROR: uefi.elf is the uefi image of TZ_IMAGE=u-boot-spl"; exit 1
+else
+fip:
+	@echo "ERROR: fip.elf is the uefi image of TZ_IMAGE=bl2"; exit 1
+
+################################################################################
+# uefi.elf (TZ_IMAGE=u-boot-spl): a FIT with BL31, OP-TEE and U-Boot
+# (monaco/uefi.its), wrapped and signed like fip.elf. XBL loads it to
+# FIT_LOAD_ADDR, where SPL reads it (CONFIG_SPL_LOAD_FIT_ADDRESS). The images
+# are stored after the FIT structure (external data), so SPL only copies the
+# structure into its early malloc pool. SPL copies U-Boot to 0xaf400000
+# while it still reads the FIT, so the FIT must not reach that address.
+################################################################################
+FIT_LOAD_ADDR = 0xaf000000
+FIT_MAX_SIZE  = 0x400000
+UEFI_ITS      = $(CURDIR)/monaco/uefi.its
+UEFI_WORK     = $(MONACO_OUT)/.uefi
+MKIMAGE       = $(U_BOOT_OUTPUT)/tools/mkimage
+
+uefi: tfa optee-os u-boot u-boot-spl qtestsign-fetch
+	grep -qx 'CONFIG_SPL_LOAD_FIT_ADDRESS=$(FIT_LOAD_ADDR)' $(U_BOOT_SPL_OUTPUT)/.config || \
+		{ echo "ERROR: SPL does not read the FIT at $(FIT_LOAD_ADDR)"; exit 1; }
+	rm -rf $(UEFI_WORK) && mkdir -p $(UEFI_WORK)
+	cp $(UEFI_ITS) $(TF_A_BUILD)/bl31.bin $(BL32_BIN) $(U_BOOT_BIN) $(UEFI_WORK)/
+	cd $(UEFI_WORK) && $(MKIMAGE) -E -B 0x1000 -f uefi.its $(MONACO_OUT)/uefi.itb
+	$(MKIMAGE) -l $(MONACO_OUT)/uefi.itb
+	[ $$(stat -c %s $(MONACO_OUT)/uefi.itb) -le $$(($(FIT_MAX_SIZE))) ] || \
+		{ echo "ERROR: uefi.itb is larger than $(FIT_MAX_SIZE) bytes"; exit 1; }
+	ln -s $(QTESTSIGN_PATH) $(UEFI_WORK)/qtestsign
+	cd $(UEFI_WORK) && CROSS_COMPILE="$(AARCH64_CROSS_COMPILE)" \
+		$(TF_A_PATH)/tools/qti/generate_fip_elf.sh $(MONACO_OUT)/uefi.itb $(FIT_LOAD_ADDR)
+	mv $(UEFI_WORK)/fip.elf $(MONACO_OUT)/uefi.elf
+	rm -rf $(UEFI_WORK)
+	@# BL31, OP-TEE and U-Boot each carry BUILD_ID.
+	[ $$(grep -ac '$(BUILD_ID)' $(MONACO_OUT)/uefi.elf) -ge 3 ] || \
+		{ echo "ERROR: uefi.elf lacks $(BUILD_ID) in BL31, OP-TEE or U-Boot"; exit 1; }
+	$(call record,uefi.itb)
+	$(call record,uefi.elf)
+endif
+
+# A tz.mbn signed from an earlier TZ image no longer matches; tz-qti-sign
+# makes a new one.
+bootimage: $(if $(filter bl2,$(TZ_IMAGE)),fip,u-boot-spl uefi)
 	rm -f $(MONACO_OUT)/tz.mbn
 	sed -i '/^tz.mbn /d' $(BUILD_INFO)
 
 ################################################################################
-# tz-qti-sign: tz.mbn from bl2.elf
+# tz-qti-sign: tz.mbn from the TZ image (bl2.elf or u-boot-spl.elf)
 #
 # swiv_build_utility.py adds the SWIV segment, then sectools signs the image
 # as a TZ image through the QTI remote signing service and validates it.
@@ -310,10 +430,10 @@ tz-qti-sign:
 	@$(call require-var,QTI_SIGN_SERVER_PORT)
 	@[ -f "$(SECURITY_PROFILE)" ] || \
 		{ echo "ERROR: $(SECURITY_PROFILE) missing: set QTI_SIGN_DIR or SECURITY_PROFILE"; exit 1; }
-	@[ -f $(MONACO_OUT)/bl2.elf ] || \
-		{ echo "ERROR: monaco/output/bl2.elf missing: run 'make bootimage' first"; exit 1; }
-	python3 $(SWIV_SCRIPT) $(MONACO_OUT)/bl2-swiv.elf $(MONACO_OUT)/bl2.elf monaco
-	$(SECTOOLS) secure-image $(MONACO_OUT)/bl2-swiv.elf \
+	@[ -f $(MONACO_OUT)/$(TZ_ELF) ] || \
+		{ echo "ERROR: monaco/output/$(TZ_ELF) missing: run 'make bootimage' first"; exit 1; }
+	python3 $(SWIV_SCRIPT) $(MONACO_OUT)/$(TZ_IMAGE)-swiv.elf $(MONACO_OUT)/$(TZ_ELF) monaco
+	$(SECTOOLS) secure-image $(MONACO_OUT)/$(TZ_IMAGE)-swiv.elf \
 		--outfile $(MONACO_OUT)/tz.mbn.tmp \
 		--image-id TZ \
 		--security-profile $(SECURITY_PROFILE) \
@@ -324,11 +444,11 @@ tz-qti-sign:
 	$(SECTOOLS) secure-image $(MONACO_OUT)/tz.mbn.tmp --validate --qti \
 		--image-id TZ --security-profile $(SECURITY_PROFILE)
 	mv $(MONACO_OUT)/tz.mbn.tmp $(MONACO_OUT)/tz.mbn
-	rm -f $(MONACO_OUT)/bl2-swiv.elf
-	id=$$(sed -n 's/^bl2.elf //p' $(BUILD_INFO)) && \
+	rm -f $(MONACO_OUT)/$(TZ_IMAGE)-swiv.elf
+	id=$(call id-of,$(TZ_ELF)) && \
 		sed -i '/^tz.mbn /d' $(BUILD_INFO) && \
 		echo "tz.mbn $$id" >> $(BUILD_INFO)
-	cd $(MONACO_OUT) && sha256sum $$(ls bl2.elf tz.mbn fip.elf efi.bin 2>/dev/null) > SHA256SUMS
+	$(sha256sums)
 
 ################################################################################
 # Linux kernel
@@ -544,12 +664,14 @@ efi-clean:
 #
 # FIREHOSE is the eMMC firehose programmer shipped with the board software.
 # tz.mbn comes from monaco/output/ (tz-qti-sign) or, when there is none, from
-# monaco/input/.
+# monaco/input/: tz.mbn for BL2, u-boot-spl.mbn for SPL. A tz.mbn from
+# tz-qti-sign has to come from the build that made the uefi image.
 ################################################################################
 FIREHOSE  ?= $(MONACO_IN)/prog_firehose_ddr.elf
 QDL       ?= qdl
 QDL_FLAGS ?= --storage emmc
-TZ_MBN     = $(firstword $(wildcard $(MONACO_OUT)/tz.mbn $(MONACO_IN)/tz.mbn))
+TZ_INPUT   = $(if $(filter bl2,$(TZ_IMAGE)),tz.mbn,u-boot-spl.mbn)
+TZ_MBN     = $(firstword $(wildcard $(MONACO_OUT)/tz.mbn $(MONACO_IN)/$(TZ_INPUT)))
 
 .PHONY: flash-loader flash-kernel
 
@@ -557,12 +679,16 @@ flash-loader:
 	@[ -f "$(FIREHOSE)" ] || \
 		{ echo "ERROR: firehose programmer $(FIREHOSE) missing (see monaco/input/README.md)"; exit 1; }
 	@[ -n "$(TZ_MBN)" ] || \
-		{ echo "ERROR: no tz.mbn: run 'make tz-qti-sign' or place a signed tz.mbn in monaco/input/"; exit 1; }
-	@[ -f $(MONACO_OUT)/fip.elf ] || \
-		{ echo "ERROR: monaco/output/fip.elf missing: run 'make bootimage' first"; exit 1; }
+		{ echo "ERROR: no tz.mbn: run 'make tz-qti-sign' or place a signed $(TZ_INPUT) in monaco/input/"; exit 1; }
+	@[ -f $(MONACO_OUT)/$(UEFI_IMAGE) ] || \
+		{ echo "ERROR: monaco/output/$(UEFI_IMAGE) missing: run 'make bootimage' first"; exit 1; }
+	@[ "$(TZ_MBN)" != "$(MONACO_OUT)/tz.mbn" ] || \
+		{ [ -n "$(call id-of,tz.mbn)" ] && \
+		  [ "$(call id-of,tz.mbn)" = "$(call id-of,$(UEFI_IMAGE))" ]; } || \
+		{ echo "ERROR: tz.mbn and $(UEFI_IMAGE) are from different builds (see $(BUILD_INFO))"; exit 1; }
 	$(QDL) $(QDL_FLAGS) $(FIREHOSE) \
 		write tz_a $(TZ_MBN) write tz_b $(TZ_MBN) \
-		write uefi_a $(MONACO_OUT)/fip.elf write uefi_b $(MONACO_OUT)/fip.elf
+		write uefi_a $(MONACO_OUT)/$(UEFI_IMAGE) write uefi_b $(MONACO_OUT)/$(UEFI_IMAGE)
 
 flash-kernel:
 	@[ -f "$(FIREHOSE)" ] || \
