@@ -76,7 +76,7 @@ make toolchains</pre>
     <tr><th>Tool</th><th>Board</th><th>Used for</th></tr>
     <tr><td><a href="https://kas.readthedocs.io/">kas</a></td><td>IQ-9075 EVK</td><td><code>make yocto</code>: the stock Yocto BSP build, as a reference</td></tr>
     <tr><td><code>python3-venv</code></td><td>IQ-9075 EVK</td><td><code>make fetch-blobs</code> installs <a href="https://github.com/qualcomm-linux/qcom-ptool">qcom-ptool</a> into a virtual environment to generate the partition tables</td></tr>
-    <tr><td>Qualcomm <code>sectools</code>, the Monaco TZ security profile, access to the QTI remote signing service</td><td>VENTUNO Q</td><td><code>make tz-qti-sign</code>: the QTI signature of <code>tz.mbn</code> (see <a href="signing.html#qti-signing">Signing</a>)</td></tr>
+    <tr><td>Qualcomm <code>sectools</code>, the Monaco TZ security profile, access to the QTI remote signing service</td><td>VENTUNO Q</td><td><code>make tz-qti-sign</code>: the QTI signature of <code>tz.mbn</code> (see <a href="signing.html#qti-signing">Signing</a>); optional, <code>monaco/input/tz.mbn</code> is a signed BL2</td></tr>
   </table>
 
 </main>

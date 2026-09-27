@@ -16,6 +16,7 @@ pi3.cfg
 # monaco.mk outputs and board inputs (see monaco/*/README.md)
 /monaco/input/*
 !/monaco/input/README.md
+!/monaco/input/tz.mbn
 /monaco/output/*
 !/monaco/output/README.md
 /monaco/blobs/

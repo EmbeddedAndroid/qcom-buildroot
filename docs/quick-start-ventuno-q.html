@@ -41,14 +41,15 @@ make all      # monaco/output/: bl2.elf, fip.elf, efi.bin</pre>
       its host tools and the whole rootfs.</p>
     </li>
     <li>
-      <p>Make the signed TZ image, <code>tz.mbn</code>. With access to the QTI remote
-      signing service and the Qualcomm signing package:</p>
+      <p>Optionally, sign your own TZ image, <code>tz.mbn</code>. With access to
+      the QTI remote signing service and the Qualcomm signing package:</p>
 <pre>make tz-qti-sign SECTOOLS=&lt;path to sectools&gt; QTI_SIGN_DIR=&lt;signing package&gt; \
      CASS_CAPABILITY=&lt;capability&gt; \
      QTI_SIGN_SERVER_URL=&lt;server URL&gt; QTI_SIGN_SERVER_PORT=&lt;port&gt;</pre>
-      <p>Without it, copy a signed <code>tz.mbn</code> built from the same TF-A tree to
-      <code>monaco/input/tz.mbn</code>. A qtestsign signature does not boot on this
-      board (see <a href="signing.html">Signing</a>).</p>
+      <p>Without it, <code>flash-loader</code> uses
+      <code>monaco/input/tz.mbn</code>, a QTI-signed BL2 built from the TF-A
+      revision <code>monaco.xml</code> pins. A qtestsign signature does not
+      boot on this board (see <a href="signing.html">Signing</a>).</p>
     </li>
   </ol>
 

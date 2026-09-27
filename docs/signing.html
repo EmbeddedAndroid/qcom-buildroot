@@ -68,9 +68,9 @@
      QTI_SIGN_SERVER_URL=&lt;server URL&gt; QTI_SIGN_SERVER_PORT=&lt;port&gt;</pre>
   <p>
     It runs the SWIV tool, <code>sectools secure-image --image-id TZ --qti --sign
-    --signing-mode QTI-REMOTE</code>, then validates the result. Users without
-    access to the signing service place a signed <code>tz.mbn</code> in
-    <code>monaco/input/</code> instead.
+    --signing-mode QTI-REMOTE</code>, then validates the result. Without access
+    to the signing service, <code>flash-loader</code> uses the QTI-signed BL2 in
+    <code>monaco/input/tz.mbn</code>.
   </p>
 
   <h2 id="per-board">What each board needs</h2>
