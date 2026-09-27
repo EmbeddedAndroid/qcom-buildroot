@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VENTUNO Q Quick Start · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="ventuno-q-qs">
+<main class="rtd-doc">
+
+  <h1 id="quick-start-ventuno-q">VENTUNO Q Quick Start</h1>
+  <p>
+    From an empty directory to an Arduino VENTUNO Q running TF-A, OP-TEE, U-Boot
+    and Linux built from source. The <a href="ventuno-q.html">board page</a>
+    explains the boot chain and the images.
+  </p>
+
+  <h2 id="setup">Get the sources and build</h2>
+  <ol>
+    <li>
+      <p>Install the build host packages, repo and qdl: <a href="toolchain.html">Host Setup</a>.</p>
+    </li>
+    <li>
+      <p>Initialize the workspace and sync it:</p>
+<pre>mkdir sandbox.monaco &amp;&amp; cd sandbox.monaco
+repo init -u <a href="https://github.com/ldts/qcom-manifest.git">https://github.com/ldts/qcom-manifest</a> -m <a href="https://github.com/ldts/qcom-manifest/blob/main/monaco.xml">monaco.xml</a>
+repo sync -j4 --no-clone-bundle</pre>
+    </li>
+    <li>
+      <p>Build the toolchains, then the images:</p>
+<pre>cd build
+make -j8 toolchains
+make all      # monaco/output/: bl2.elf, fip.elf, efi.bin</pre>
+      <p><code>make all</code> runs <code>bootimage</code> (OP-TEE, U-Boot, TF-A,
+      <code>fip.elf</code>) and <code>efi</code> (Linux, Buildroot, the UKI and
+      <code>efi.bin</code>). The first build takes the longest: Buildroot builds
+      its host tools and the whole rootfs.</p>
+    </li>
+    <li>
+      <p>Optionally, sign your own TZ image, <code>tz.mbn</code>. With access to
+      the QTI remote signing service and the Qualcomm signing package:</p>
+<pre>make tz-qti-sign SECTOOLS=&lt;path to sectools&gt; QTI_SIGN_DIR=&lt;signing package&gt; \
+     CASS_CAPABILITY=&lt;capability&gt; \
+     QTI_SIGN_SERVER_URL=&lt;server URL&gt; QTI_SIGN_SERVER_PORT=&lt;port&gt;</pre>
+      <p>Without it, <code>flash-loader</code> uses
+      <code>monaco/input/tz.mbn</code>, a QTI-signed BL2 built from the TF-A
+      revision <code>monaco.xml</code> pins. A qtestsign signature does not
+      boot on this board (see <a href="signing.html">Signing</a>).</p>
+    </li>
+  </ol>
+
+  <h2 id="flash">Flash</h2>
+  <ol start="5">
+    <li>
+      <p>Copy the eMMC firehose programmer from the board's stock software image to
+      <code>monaco/input/prog_firehose_ddr.elf</code>
+      (<code>monaco/input/README.md</code> gives the SHA-256 of the one this build
+      was tested with).</p>
+    </li>
+    <li>
+      <p>Connect the board's USB port to the build host and put the board in EDL
+      mode (it shows up as <code>05c6:9008</code> in <code>lsusb</code>; the board's
+      documentation describes how to get there).</p>
+    </li>
+    <li>
+      <p>Write the boot chain and the kernel image:</p>
+<pre>make flash-loader    # tz_a, tz_b, uefi_a, uefi_b
+make flash-kernel    # efi</pre>
+      <p>Only these five partitions are written; XBL and the rest of the stock
+      firmware stay in place.</p>
+    </li>
+  </ol>
+
+  <h2 id="boot">Boot</h2>
+  <ol start="8">
+    <li>
+      <p>Open the console (<code>ttyMSM0</code> on the board, 115200 8N1) and power
+      the board on. TF-A, OP-TEE, U-Boot and Linux each print the build's
+      <code>BUILD_ID</code> (see <code>monaco/output/build-info.txt</code>), and so
+      does the login banner. Log in as <code>root</code>, without a password.</p>
+    </li>
+    <li>
+      <p>Check OP-TEE from Linux:</p>
+<pre>xtest</pre>
+    </li>
+  </ol>
+
+  <h2 id="iterate">Iterate</h2>
+  <table class="rtd-table">
+    <tr><th>Changed</th><th>Rebuild and flash</th></tr>
+    <tr><td>Linux, rootfs, kernel command line</td><td><code>make efi flash-kernel</code></td></tr>
+    <tr><td>U-Boot or OP-TEE</td><td><code>make bootimage</code>, then <code>make flash-loader</code>
+        (<code>bootimage</code> drops <code>monaco/output/tz.mbn</code>; run <code>tz-qti-sign</code>
+        again, or <code>flash-loader</code> falls back to <code>monaco/input/tz.mbn</code>)</td></tr>
+    <tr><td>TF-A</td><td><code>make bootimage tz-qti-sign flash-loader</code>: BL2 changed, so it needs a new signature</td></tr>
+  </table>
+  <p>
+    <code>make help</code> lists every target and variable. The kernel
+    configuration is generated once; after changing the options in
+    <code>monaco.mk</code>, run <code>make linux-defconfig</code>.
+  </p>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>

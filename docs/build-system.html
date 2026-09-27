@@ -25,6 +25,7 @@
   <table class="rtd-table">
     <tr><th>Board</th><th>SoC</th><th>Manifest</th><th>Makefile</th><th>Board directory</th></tr>
     <tr><td><a href="iq-9075-evk.html">Qualcomm IQ-9075 EVK</a></td><td>Lemans (QCS9075)</td><td><code>lemans.xml</code></td><td><code>lemans.mk</code></td><td><code>lemans/</code></td></tr>
+    <tr><td><a href="ventuno-q.html">Arduino VENTUNO Q</a></td><td>Monaco (QCS8275)</td><td><code>monaco.xml</code></td><td><code>monaco.mk</code></td><td><code>monaco/</code></td></tr>
   </table>
 
   <h2 id="manifests">Manifests</h2>
@@ -57,7 +58,7 @@ repo sync -j4 --no-clone-bundle</pre>
     <tr><th>Path</th><th>Contents</th></tr>
     <tr><td><code>&lt;platform&gt;.mk</code></td><td>The board makefile: component builds, image assembly, signing and flashing</td></tr>
     <tr><td><code>&lt;platform&gt;/</code></td><td>Board files: <code>input/</code> (files the build does not produce), <code>output/</code> (images), <code>overlay/</code> (rootfs files), patches</td></tr>
-    <tr><td><code>qcom/</code></td><td>Files shared by the Qualcomm boards: the SWIV tool (<code>qcom/security/</code>), the systemd EFI stub for the UKI (<code>qcom/ukify/</code>), the qrtr-ns and tqftpserv init scripts (<code>qcom/overlay/</code>)</td></tr>
+    <tr><td><code>qcom/</code></td><td>Files shared by the Qualcomm boards: the SWIV tool (<code>qcom/security/</code>), the systemd EFI stub for the UKI (<code>qcom/ukify/</code>), the qrtr-ns and tqftpserv init scripts (<code>qcom/overlay/</code>), the FastRPC runtime check (<code>qcom/scripts/</code>)</td></tr>
     <tr><td><code>common.mk</code>, <code>toolchain.mk</code></td><td>OP-TEE build.git: OP-TEE and Buildroot rules shared by all platforms, toolchain download</td></tr>
     <tr><td><code>br-ext/</code></td><td>Buildroot external tree: OP-TEE client, xtest and examples, and the Qualcomm DSP userspace packages (<code>fastrpc_ext</code>, <code>qrtr_ext</code>, <code>tqftpserv_ext</code>)</td></tr>
     <tr><td><code>docs/</code></td><td>This documentation</td></tr>
@@ -69,13 +70,17 @@ repo sync -j4 --no-clone-bundle</pre>
     boot chain and the OS. The Qualcomm boot firmware in front of them (XBL and
     the firmware it loads) is the stock release; on the IQ-9075 EVK
     <code>flash-loader</code> writes it from the public boot binaries that
-    <code>make fetch-blobs</code> downloads.
+    <code>make fetch-blobs</code> downloads, on the VENTUNO Q it is left in place.
   </p>
   <table class="rtd-table">
     <tr><th>Board</th><th>tz partition</th><th>uefi partition</th><th>efi partition</th></tr>
     <tr><td>IQ-9075 EVK</td>
         <td><code>tz.mbn</code>: U-Boot SPL with a SWIV segment, qtestsign signature</td>
         <td><code>uefi.elf</code>: FIT image with BL31, OP-TEE and U-Boot proper, loaded by the SPL</td>
+        <td><code>efi.bin</code>: FAT32 ESP with the UKI</td></tr>
+    <tr><td>VENTUNO Q</td>
+        <td><code>tz.mbn</code>: TF-A BL2 (or U-Boot SPL with <code>TZ_IMAGE=u-boot-spl</code>) with a SWIV segment, QTI signature</td>
+        <td><code>fip.elf</code>: FIP with BL31, OP-TEE and U-Boot in an ELF, qtestsign signature, loaded by XBL (<code>uefi.elf</code>, a FIT, for SPL)</td>
         <td><code>efi.bin</code>: FAT32 ESP with the UKI</td></tr>
   </table>
   <p>
@@ -88,7 +93,7 @@ repo sync -j4 --no-clone-bundle</pre>
   <table class="rtd-table">
     <tr><th>Target</th><th>Result</th></tr>
     <tr><td><code>toolchains</code></td><td>Cross toolchains in <code>toolchains/</code> (see <a href="toolchain.html#toolchains">Host Setup</a>)</td></tr>
-    <tr><td><code>bootimage</code></td><td>The tz and uefi images in <code>&lt;platform&gt;/output/</code></td></tr>
+    <tr><td><code>bootimage</code></td><td>The tz and uefi images in <code>&lt;platform&gt;/output/</code> (on the VENTUNO Q <code>bl2.elf</code>, which <code>tz-qti-sign</code> turns into the tz image)</td></tr>
     <tr><td><code>efi</code></td><td>Linux, the Buildroot rootfs, the UKI and <code>&lt;platform&gt;/output/efi.bin</code></td></tr>
     <tr><td><code>flash-loader</code></td><td>Writes the tz and uefi images with qdl (board in EDL mode)</td></tr>
     <tr><td><code>flash-kernel</code></td><td>Writes <code>efi.bin</code> with qdl (board in EDL mode)</td></tr>
@@ -112,6 +117,7 @@ repo sync -j4 --no-clone-bundle</pre>
       <code>qcom/ukify/</code>. <code>efi.bin</code> is a FAT32 image holding it
       as <code>EFI/Linux/uki.efi</code>; U-Boot starts it through UEFI (on the
       IQ-9075 EVK through systemd-boot, installed as
+      <code>EFI/BOOT/bootaa64.efi</code>; on the VENTUNO Q the UKI itself is
       <code>EFI/BOOT/bootaa64.efi</code>).</li>
     <li>The console is the Qualcomm GENI UART, <code>ttyMSM0</code> at 115200 8N1.</li>
   </ul>
