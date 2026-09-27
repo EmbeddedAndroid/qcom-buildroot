@@ -63,6 +63,11 @@ body.rtd.presenting .rtd-logo .word { height: 18px; }
 .rtd-side li.current > a .sub { color: #666; }
 .rtd-side .rtd-subnav { padding: 0 0 0.5rem; }
 .rtd-side .rtd-subnav a { padding-left: 2.25rem; font-size: 0.82rem; }
+/* Group captions (shared concept pages, one group per board) */
+.rtd-side li.rtd-caption {
+  color: #55a5d9; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; padding: 1rem 1.25rem 0.25rem;
+}
 /* Content */
 main.rtd-doc { max-width: 1180px; margin: 0 auto; padding: 1.5rem 2rem 4rem; }
 .rtd-breadcrumb { font-size: 0.85rem; color: #999; padding-bottom: 0.75rem; border-bottom: 1px solid var(--rtd-border); margin-bottom: 1.5rem; }
@@ -79,6 +84,12 @@ main.rtd-doc pre { background: #f8f8f8; border: 1px solid var(--rtd-border); bor
 main.rtd-doc pre code { background: none; border: none; padding: 0; color: inherit; }
 .rtd-anchor { visibility: hidden; margin-left: 0.35rem; color: var(--rtd-accent); text-decoration: none; font-weight: 400; }
 h1:hover .rtd-anchor, h2:hover .rtd-anchor, h3:hover .rtd-anchor { visibility: visible; }
+/* Tables on the article pages (concept and board pages) */
+main.rtd-doc table.rtd-table { border-collapse: collapse; width: 100%; margin: 1rem 0 1.4rem; font-size: 0.9rem; }
+main.rtd-doc table.rtd-table th, main.rtd-doc table.rtd-table td {
+  border: 1px solid var(--rtd-border); padding: 0.45rem 0.7rem; text-align: left; vertical-align: top;
+}
+main.rtd-doc table.rtd-table th { background: #f3f6f6; font-weight: 700; }
 .rtd-note, .rtd-warn { border-radius: 4px; padding: 0.8rem 1rem; margin: 1.2rem 0; font-size: 0.92rem; }
 .rtd-note { background: var(--rtd-note-bg); border-left: 4px solid var(--rtd-accent); }
 .rtd-warn { background: var(--rtd-warn-bg); border-left: 4px solid #f0b37e; }

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Host Setup · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="toolchain">
+<main class="rtd-doc">
+
+  <h1 id="host-setup">Host Setup and Toolchains</h1>
+  <p>
+    Every board is built on a Linux host from a <code>repo</code> workspace, with
+    cross compilers that the build downloads itself. This page lists what the
+    host needs; the board pages list what is specific to each board.
+  </p>
+
+  <h2 id="host">Build host</h2>
+  <p>
+    A Linux x86_64 or aarch64 host with the
+    <a href="https://optee.readthedocs.io/en/latest/building/prerequisites.html">OP-TEE build prerequisites</a>
+    installed. On top of those, the Qualcomm boards need:
+  </p>
+  <table class="rtd-table">
+    <tr><th>Package</th><th>Used for</th></tr>
+    <tr><td><code>systemd-ukify</code></td><td>Building the Unified Kernel Image (UKI) that carries the kernel, DTB, initramfs and command line</td></tr>
+    <tr><td><code>mtools</code>, <code>dosfstools</code></td><td>Creating the FAT ESP image <code>efi.bin</code> and copying the UKI into it</td></tr>
+    <tr><td><code>python3</code> with <code>cryptography</code> 3.1 or newer</td><td><a href="https://github.com/msm8916-mainline/qtestsign">qtestsign</a>, cloned by the build, and the SWIV tool in <code>qcom/security/</code></td></tr>
+    <tr><td><code>git</code>, <code>curl</code>, <code>unzip</code></td><td>Fetching toolchains, firmware and helper repositories during the build</td></tr>
+  </table>
+  <p>
+    Buildroot rejects <code>PATH</code> entries that contain spaces; the board
+    makefiles drop them (this matters on WSL, where Windows paths end up in
+    <code>PATH</code>).
+  </p>
+
+  <h2 id="repo">repo</h2>
+  <p>
+    The sources of each board are described by a manifest in
+    <a href="https://github.com/ldts/qcom-manifest">qcom-manifest</a> and checked
+    out with <a href="https://gerrit.googlesource.com/git-repo">repo</a>:
+  </p>
+<pre>mkdir -p ~/bin
+curl https://storage.googleapis.com/git-repo-downloads/repo -o ~/bin/repo
+chmod a+x ~/bin/repo</pre>
+  <p>
+    See <a href="build-system.html#workspace">Build System</a> for the workspace
+    layout <code>repo sync</code> produces.
+  </p>
+
+  <h2 id="toolchains">Toolchains</h2>
+  <p>
+    <code>make toolchains</code>, run once in <code>build/</code>, downloads the Arm
+    GNU Toolchain 14.3.rel1 (aarch64 and aarch32 cross compilers) and a Rust
+    toolchain into <code>toolchains/</code> next to <code>build/</code>. TF-A,
+    OP-TEE, U-Boot, Linux and the Buildroot target packages are compiled with
+    them; the host compiler only builds host tools.
+  </p>
+<pre>cd build
+make toolchains</pre>
+
+  <h2 id="flash-tools">Flashing tools</h2>
+  <p>
+    The boards are flashed over USB in EDL (Emergency Download) mode with
+    <a href="https://github.com/linux-msm/qdl">qdl</a>, built from source or from
+    a distribution package, on the host the board's USB port is connected to.
+    See <a href="flashing.html">Flashing</a>.
+  </p>
+
+  <h2 id="optional">Optional, per board</h2>
+  <table class="rtd-table">
+    <tr><th>Tool</th><th>Board</th><th>Used for</th></tr>
+    <tr><td><a href="https://kas.readthedocs.io/">kas</a></td><td>IQ-9075 EVK</td><td><code>make yocto</code>: the stock Yocto BSP build, as a reference</td></tr>
+    <tr><td><code>python3-venv</code></td><td>IQ-9075 EVK</td><td><code>make fetch-blobs</code> installs <a href="https://github.com/qualcomm-linux/qcom-ptool">qcom-ptool</a> into a virtual environment to generate the partition tables</td></tr>
+  </table>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>

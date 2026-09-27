@@ -3,12 +3,19 @@
 (function (root) {
   'use strict';
 
+  // Pages without a group are shared entry points; a group collects the
+  // shared concept pages or the pages of one board.
   var NAV = [
-    { id: 'index',   file: 'index.html',          title: 'Home',                  subtitle: 'Overview' },
-    { id: 'why',     file: 'why.html',            title: 'Why this Build System', subtitle: 'Rationale' },
-    { id: 'quick',   file: 'quick-start.html',    title: 'Quick Start',           subtitle: 'init · sync · build · flash' },
-    { id: 'focused', file: 'lemans-focused.html', title: 'Lemans — Focused',      subtitle: 'Platform · Boot · Projects' },
-    { id: 'full',    file: 'lemans.html',         title: 'Lemans — Comprehensive', subtitle: 'Build System Deep Dive' },
+    { id: 'index',     file: 'index.html',          title: 'Home',                  subtitle: 'Overview · boards' },
+    { id: 'why',       file: 'why.html',            title: 'Why this Build System', subtitle: 'Rationale' },
+    { id: 'toolchain', file: 'toolchain.html',      title: 'Host Setup',            subtitle: 'Packages · repo · toolchains · qdl', group: 'Concepts' },
+    { id: 'build',     file: 'build-system.html',   title: 'Build System',          subtitle: 'Manifests · makefiles · images',    group: 'Concepts' },
+    { id: 'signing',   file: 'signing.html',        title: 'Signing',               subtitle: 'TZ stage · SWIV · qtestsign',       group: 'Concepts' },
+    { id: 'flashing',  file: 'flashing.html',       title: 'Flashing',              subtitle: 'EDL · qdl · partitions',            group: 'Concepts' },
+    { id: 'iq9075',    file: 'iq-9075-evk.html',    title: 'IQ-9075 EVK',           subtitle: 'Boot chain · build · flash',        group: 'IQ-9075 EVK (Lemans)' },
+    { id: 'quick',     file: 'quick-start.html',    title: 'IQ-9075 EVK Quick Start', subtitle: 'init · sync · build · flash',     group: 'IQ-9075 EVK (Lemans)' },
+    { id: 'focused',   file: 'lemans-focused.html', title: 'Lemans: Focused',       subtitle: 'Platform · Boot · Projects',        group: 'IQ-9075 EVK (Lemans)' },
+    { id: 'full',      file: 'lemans.html',         title: 'Lemans: Comprehensive', subtitle: 'Build System Deep Dive',            group: 'IQ-9075 EVK (Lemans)' },
   ];
 
   function basename(path) {
@@ -27,10 +34,23 @@
     return -1;
   }
 
+  // First page of a group, the link target of its breadcrumb.
+  function groupHead(nav, group) {
+    for (var i = 0; i < nav.length; i++) {
+      if (nav[i].group === group) return nav[i];
+    }
+    return null;
+  }
+
   function breadcrumbFor(nav, path) {
     var crumbs = [{ title: 'Docs', href: 'index.html' }];
     var i = currentIndex(nav, path);
-    if (i > 0) crumbs.push({ title: nav[i].title, href: nav[i].file });
+    if (i > 0) {
+      if (nav[i].group) {
+        crumbs.push({ title: nav[i].group, href: groupHead(nav, nav[i].group).file });
+      }
+      crumbs.push({ title: nav[i].title, href: nav[i].file });
+    }
     return crumbs;
   }
 
@@ -44,7 +64,8 @@
   }
 
   var api = { NAV: NAV, basename: basename, currentIndex: currentIndex,
-              breadcrumbFor: breadcrumbFor, prevNextFor: prevNextFor };
+              groupHead: groupHead, breadcrumbFor: breadcrumbFor,
+              prevNextFor: prevNextFor };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.RTD = api;
@@ -62,11 +83,16 @@
   function buildSidebar(path) {
     var side = el('nav', 'rtd-side');
     var head = el('div', 'rtd-side-head',
-      '<a href="index.html">OP-TEE · Lemans EVK<span class="sub">SA8775P / QCS9075</span></a>');
+      '<a href="index.html">OP-TEE · Qualcomm<span class="sub">Open boot firmware</span></a>');
     side.appendChild(head);
     var ul = el('ul');
     var curIdx = api.currentIndex(api.NAV, path);
+    var group = null;
     api.NAV.forEach(function (item, i) {
+      if (item.group && item.group !== group) {
+        ul.appendChild(el('li', 'rtd-caption', item.group));
+      }
+      group = item.group || null;
       var li = el('li');
       if (i === curIdx) li.className = 'current';
       li.appendChild(el('a', null,

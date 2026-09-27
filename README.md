@@ -69,8 +69,11 @@ See `{platform}/input/README.md` for the full file-by-file breakdown.
 
 ## Documentation
 
-HTML documentation for each platform is in `docs/`. Open `docs/index.html` as the
-landing page (overview, quick start, and the Lemans build/flash/boot deep dive).
+HTML documentation is in `docs/`. Open `docs/index.html` as the landing page:
+the board list, the pages shared by all boards (host setup, build system,
+signing, flashing) and, per board, a board page and a quick start. Run
+`node --test docs/_rtd.test.js` after changing the page list in
+`docs/_rtd.js`.
 
 ## Further reading
 
