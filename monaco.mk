@@ -27,8 +27,8 @@
 # XBL authenticates the TZ image with the QTI authenticator even when secure
 # boot is disabled, so a qtestsign signature is not accepted for tz.mbn,
 # whether it holds BL2 or SPL. tz-qti-sign signs the TZ image through the QTI
-# remote signing service (CASS); without access to it, place a signed tz.mbn
-# in monaco/input/ (see its README.md).
+# remote signing service (CASS). Without access to it, flash-loader uses the
+# QTI-signed BL2 in monaco/input/tz.mbn (see its README.md).
 #
 # Every invocation stamps BUILD_ID into each component it builds: the TF-A
 # build string, the OP-TEE version, the U-Boot and Linux versions and the

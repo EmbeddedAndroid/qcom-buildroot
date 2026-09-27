@@ -41,7 +41,8 @@ Arduino VENTUNO Q (Monaco):
 
 ```sh
 make -f monaco.mk all           # bl2.elf + fip.elf (boot chain), efi.bin (kernel + rootfs)
-make -f monaco.mk tz-qti-sign       # tz.mbn: QTI-signed BL2 (needs QTI remote signing access)
+make -f monaco.mk tz-qti-sign       # optional: signed BL2 (QTI remote signing access);
+                                # flash-loader falls back to monaco/input/tz.mbn
 
 # Flash with the board in EDL mode; the eMMC firehose programmer goes in
 # monaco/input/ (see monaco/input/README.md)
