@@ -109,6 +109,10 @@ BR2_PACKAGE_QRTR_EXT            = y
 BR2_PACKAGE_TQFTPSERV_EXT       = y
 BR2_PACKAGE_FASTRPC_EXT         = y
 BR2_PACKAGE_STRESS_NG           = y
+# ALSA tools to route and play audio through the ADSP sound card.
+BR2_PACKAGE_ALSA_UTILS          = y
+BR2_PACKAGE_ALSA_UTILS_APLAY    = y
+BR2_PACKAGE_ALSA_UTILS_AMIXER   = y
 BR2_ROOTFS_OVERLAY              = $(CURDIR)/qcom/overlay $(CURDIR)/monaco/overlay $(DSP_OVERLAY)
 
 ################################################################################
@@ -413,12 +417,18 @@ linux-clean:
 # DSP_BIN_BUILD. The dsp-binaries Arduino Monza entry links the SA8775P-RIDE
 # runtime, which those images reject, so the QCS8300-RIDE runtime of the same
 # build is installed under the Arduino Monza path instead;
-# qcom/scripts/dsp-runtime-check.py checks the pairing.
+# qcom/scripts/dsp-runtime-check.py checks the pairing. The same revision
+# provides the QUP serial engine firmware (qupv3fw.elf), which Linux loads
+# for the engines nothing earlier in the boot has set up.
 ################################################################################
 # GitLab serves partial clones; git.kernel.org sends the whole tree.
 DSP_FW_REPO   ?= https://gitlab.com/kernel-firmware/linux-firmware.git
 DSP_FW_REV    ?= 664f8b6adeba20be0960d9cb1b2ad8c5a4d7e0e3
-DSP_FW_FILES   = adsp.mbn adspr.jsn adspua.jsn cdsp0.mbn cdspr.jsn gpdsp0.mbn
+DSP_FW_FILES   = adsp.mbn adspr.jsn adspua.jsn cdsp0.mbn cdspr.jsn gpdsp0.mbn qupv3fw.elf
+# The AudioReach topology the sound card requests (qcom/qcs8300/<model>-tplg.bin)
+# is newer than DSP_FW_REV, so it comes from its own pinned revision.
+DSP_TPLG_REV  ?= e8a8bc636565a2874b2123684b8ef23f30687c27
+DSP_TPLG       = qcom/qcs8300/arduino-monza-tplg.bin
 DSP_BIN_REPO  ?= https://github.com/linux-msm/dsp-binaries.git
 DSP_BIN_TAG   ?= 20260916
 DSP_BIN_BUILD ?= DSP.AT.1.0.1-00170-LEMANS-1
@@ -459,6 +469,11 @@ dsp-firmware:
 	cp $(DSP_OUT)/linux-firmware/qcom/NOTICE.txt $(DSP_OVERLAY)/lib/firmware/qcom/
 	cd $(DSP_OUT)/linux-firmware/qcom/qcs8300 && \
 		cp -L $(DSP_FW_FILES) $(DSP_OVERLAY)/lib/firmware/qcom/qcs8300/
+	$(DSP_FW_GIT) cat-file -e $(DSP_TPLG_REV) 2>/dev/null || \
+		$(DSP_FW_GIT) fetch -q --depth=1 --filter=blob:none $(DSP_FW_REPO) $(DSP_TPLG_REV)
+	$(DSP_FW_GIT) show $(DSP_TPLG_REV):$(DSP_TPLG) > $(DSP_OVERLAY)/lib/firmware/$(DSP_TPLG)
+	$(DSP_FW_GIT) show $(DSP_TPLG_REV):LICENSES/LICENCE.linaro > \
+		$(DSP_OVERLAY)/lib/firmware/LICENCE.linaro
 	for d in adsp cdsp gdsp0; do \
 		printf 'Install: %s\t%s\t%s\n' $(DSP_BIN_SRC) $$d $$d-$(DSP_BIN_BUILD); \
 		printf 'Link: %s\t%s\n' $(DSP_BIN_SRC)/dsp/$$d $(DSP_BIN_BOARD)/dsp/$$d; \
