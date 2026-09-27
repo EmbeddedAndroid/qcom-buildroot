@@ -18,3 +18,4 @@ pi3.cfg
 !/monaco/input/README.md
 /monaco/output/*
 !/monaco/output/README.md
+/monaco/blobs/

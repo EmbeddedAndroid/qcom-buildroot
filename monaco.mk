@@ -37,7 +37,7 @@
 #   clean          clean all components and monaco/output/
 #
 # Component targets: optee-os, u-boot, tfa, fip, linux, linux-defconfig,
-# buildroot, qtestsign-fetch, and the matching *-clean targets.
+# buildroot, dsp-firmware, qtestsign-fetch, and the matching *-clean targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
@@ -101,6 +101,16 @@ BR2_PACKAGE_OPTEE_TEST          = n
 BR2_PACKAGE_OPTEE_EXAMPLES      = n
 BR2_PACKAGE_OPTEE_BENCHMARK     = n
 
+# DSP userspace: qrtr (libqrtr, qrtr-ns), tqftpserv and fastrpc (the rpcd
+# daemons, fastrpc_test and its libraries), plus stress-ng for qcom-tests.
+# Their init scripts come from qcom/overlay and monaco/overlay; the DSP
+# firmware and FastRPC runtime from the dsp-firmware target.
+BR2_PACKAGE_QRTR_EXT            = y
+BR2_PACKAGE_TQFTPSERV_EXT       = y
+BR2_PACKAGE_FASTRPC_EXT         = y
+BR2_PACKAGE_STRESS_NG           = y
+BR2_ROOTFS_OVERLAY              = $(CURDIR)/qcom/overlay $(CURDIR)/monaco/overlay $(DSP_OVERLAY)
+
 ################################################################################
 # Paths to repositories: the path= attributes in manifest.git/monaco.xml.
 # OPTEE_OS_PATH, UBOOT_PATH and LINUX_PATH come from common.mk.
@@ -109,6 +119,14 @@ TF_A_PATH ?= $(ROOT)/arm-trusted-firmware
 
 include common.mk
 include toolchain.mk
+
+# common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
+# which turns the Monaco target.mk's '+= qcom_pas/...' into a no-op. Append
+# the qcom_pas PAS TA here (after the include) so it is embedded as an early TA
+# and advertised on the TEE bus; qcom_pas_tee (Linux) only binds when that TA
+# (cff7d191) is enumerated, and the ADSP, CDSP and GP-DSP0 remoteprocs stay in
+# deferred probe without it.
+CFG_IN_TREE_EARLY_TAS += qcom_pas/cff7d191-7ca0-4784-af13-48223b9a4fbe
 
 OPTEE_OS_COMMON_EXTRA_FLAGS += TEE_IMPL_VERSION=$(BUILD_ID)
 
@@ -122,7 +140,7 @@ export PATH := $(shell echo "$$PATH" | tr ':' '\n' | grep -v ' ' | tr '\n' ':' |
 
 all: bootimage efi
 
-clean: optee-os-clean u-boot-clean tfa-clean linux-clean buildroot-clean
+clean: optee-os-clean u-boot-clean tfa-clean linux-clean buildroot-clean dsp-firmware-clean
 	rm -f $(MONACO_OUT)/*.elf $(MONACO_OUT)/*.mbn $(MONACO_OUT)/*.bin \
 	      $(MONACO_OUT)/*.efi $(MONACO_OUT)/*.dtb $(BUILD_INFO) \
 	      $(MONACO_OUT)/SHA256SUMS
@@ -155,7 +173,7 @@ help:
 	@echo "  clean          clean all components and monaco/output/"
 	@echo ""
 	@echo "Component targets: optee-os u-boot tfa fip linux linux-defconfig"
-	@echo "  buildroot qtestsign-fetch, and the matching *-clean targets"
+	@echo "  buildroot dsp-firmware qtestsign-fetch, and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS LINUX_DEFCONFIG"
 	@echo "  LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS; tz-qti-sign: SECTOOLS QTI_SIGN_DIR"
@@ -314,7 +332,17 @@ tz-qti-sign:
 # linux-defconfig applies LINUX_DEFCONFIG and the options below; linux runs it
 # when there is no .config. The kernel has no modules, so everything the
 # board needs is built in.
+#
+# LINUX_DSP_CONFIGS: PAS remoteprocs with the OP-TEE backend, GLINK over
+# SMEM, QRTR and FastRPC for the ADSP, CDSP and GPDSP. linux fails if any of
+# them is not built in.
 ################################################################################
+LINUX_DSP_CONFIGS = \
+	REMOTEPROC QCOM_Q6V5_PAS QCOM_SYSMON QCOM_PAS QCOM_PAS_TEE QCOM_SCM \
+	RPMSG RPMSG_QCOM_GLINK RPMSG_QCOM_GLINK_SMEM QCOM_SMEM QCOM_SMP2P \
+	QCOM_SMSM QCOM_IPCC QCOM_AOSS_QMP QCOM_RPMHPD QCOM_COMMAND_DB \
+	QRTR QRTR_SMD QCOM_PD_MAPPER QCOM_FASTRPC \
+	CMA DMA_CMA DMABUF_HEAPS DMABUF_HEAPS_SYSTEM DMABUF_HEAPS_CMA
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
 LINUX_DT         = monaco-arduino-monza
@@ -341,7 +369,8 @@ linux-defconfig:
 		-e VIRTUALIZATION \
 		-e KVM \
 		-d LOCALVERSION_AUTO \
-		-d MODULES
+		-d MODULES \
+		$(addprefix -e ,$(LINUX_DSP_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
 # The base DTB is built with symbols (-@) so the EL2 overlay can be applied.
@@ -349,6 +378,10 @@ linux: | $(MONACO_OUT)
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) linux-defconfig; \
 	fi
+	@for c in $(LINUX_DSP_CONFIGS); do \
+		grep -qx "CONFIG_$$c=y" $(LINUX_PATH)/.config || \
+		{ echo "ERROR: CONFIG_$$c is not built in: run 'make linux-defconfig'"; exit 1; }; \
+	done
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) -j$(shell nproc) \
 		LOCALVERSION=-$(BUILD_ID) DTC_FLAGS_$(LINUX_DT)=-@ \
 		Image vmlinuz.efi qcom/$(LINUX_DT).dtb qcom/$(LINUX_DT_OVERLAY).dtbo
@@ -356,10 +389,92 @@ linux: | $(MONACO_OUT)
 		{ echo "ERROR: the kernel release lacks $(BUILD_ID)"; exit 1; }
 	$(LINUX_PATH)/scripts/dtc/fdtoverlay -i $(LINUX_DTS_DIR)/$(LINUX_DT).dtb \
 		-o $(LINUX_DTB) $(LINUX_DTS_DIR)/$(LINUX_DT_OVERLAY).dtbo
+	@# The FastRPC runtime is picked by the DT model (see dsp-firmware).
+	$(LINUX_PATH)/scripts/dtc/dtc -q -I dtb -O dts $(LINUX_DTB) | \
+		grep -qF 'model = "$(DSP_DT_MODEL)";'
 
 linux-clean:
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) clean
 	rm -f $(LINUX_DTB)
+
+################################################################################
+# DSP firmware and FastRPC runtime, fetched at pinned revisions into
+# monaco/blobs/ and staged into DSP_OVERLAY:
+#   /lib/firmware/qcom/qcs8300/  the images the remoteproc firmware-name
+#                                properties of the VENTUNO Q DT name (links
+#                                resolved to files) and their .jsn
+#                                protection-domain lists
+#   /usr/share/qcom/             the FastRPC DSP runtime (fastrpc_shell_N,
+#                                skels) and the conf.d yaml that maps the DT
+#                                model to it
+# A DSP only loads a fastrpc_shell or skel whose segment hashes its signed
+# image carries, so the runtime has to come from the DSP build of the
+# firmware. linux-firmware at DSP_FW_REV has the qcs8300 images at
+# DSP_BIN_BUILD. The dsp-binaries Arduino Monza entry links the SA8775P-RIDE
+# runtime, which those images reject, so the QCS8300-RIDE runtime of the same
+# build is installed under the Arduino Monza path instead;
+# qcom/scripts/dsp-runtime-check.py checks the pairing.
+################################################################################
+# GitLab serves partial clones; git.kernel.org sends the whole tree.
+DSP_FW_REPO   ?= https://gitlab.com/kernel-firmware/linux-firmware.git
+DSP_FW_REV    ?= 664f8b6adeba20be0960d9cb1b2ad8c5a4d7e0e3
+DSP_FW_FILES   = adsp.mbn adspr.jsn adspua.jsn cdsp0.mbn cdspr.jsn gpdsp0.mbn
+DSP_BIN_REPO  ?= https://github.com/linux-msm/dsp-binaries.git
+DSP_BIN_TAG   ?= 20260916
+DSP_BIN_BUILD ?= DSP.AT.1.0.1-00170-LEMANS-1
+DSP_BIN_SRC    = qcs8300/Qualcomm/QCS8300-RIDE
+DSP_BIN_BOARD  = qcs8300/Arduino/Monza
+DSP_BIN_CONF   = hexagon-dsp-binaries-arduino-monza.yaml
+DSP_DT_MODEL   = Arduino VENTUNO Q
+# <firmware>:<runtime directory>, one per remoteproc
+DSP_PAIRS      = adsp.mbn:adsp cdsp0.mbn:cdsp gpdsp0.mbn:gdsp0
+DSP_OUT        = $(CURDIR)/monaco/blobs
+DSP_OVERLAY    = $(DSP_OUT)/overlay
+DSP_FW_GIT     = git -C $(DSP_OUT)/linux-firmware
+DSP_BIN_GIT    = git -C $(DSP_OUT)/dsp-binaries
+
+.PHONY: dsp-firmware dsp-firmware-clean
+
+buildroot: dsp-firmware
+
+dsp-firmware:
+	mkdir -p $(DSP_OUT)
+	[ "$$($(DSP_FW_GIT) rev-parse -q --verify HEAD 2>/dev/null)" = $(DSP_FW_REV) ] || { \
+		rm -rf $(DSP_OUT)/linux-firmware && \
+		git init -q $(DSP_OUT)/linux-firmware && \
+		$(DSP_FW_GIT) fetch -q --depth=1 --filter=blob:none $(DSP_FW_REPO) $(DSP_FW_REV) && \
+		$(DSP_FW_GIT) sparse-checkout set --no-cone \
+			/LICENSE.qcom-2 /qcom/NOTICE.txt /qcom/qcs8300/ /qcom/sa8775p/ && \
+		$(DSP_FW_GIT) checkout -q FETCH_HEAD; }
+	[ "$$($(DSP_BIN_GIT) describe --tags --exact-match 2>/dev/null)" = $(DSP_BIN_TAG) ] || { \
+		rm -rf $(DSP_OUT)/dsp-binaries && \
+		git clone -q --depth=1 --filter=blob:none --no-checkout --branch $(DSP_BIN_TAG) \
+			$(DSP_BIN_REPO) $(DSP_OUT)/dsp-binaries && \
+		$(DSP_BIN_GIT) sparse-checkout set conf.d scripts \
+			$(foreach d,adsp cdsp gdsp0,$(DSP_BIN_SRC)/$(d)-$(DSP_BIN_BUILD)) && \
+		$(DSP_BIN_GIT) checkout -q; }
+	rm -rf $(DSP_OVERLAY)
+	mkdir -p $(DSP_OVERLAY)/lib/firmware/qcom/qcs8300 $(DSP_OVERLAY)/usr/share/qcom/conf.d
+	cp $(DSP_OUT)/linux-firmware/LICENSE.qcom-2 $(DSP_OVERLAY)/lib/firmware/
+	cp $(DSP_OUT)/linux-firmware/qcom/NOTICE.txt $(DSP_OVERLAY)/lib/firmware/qcom/
+	cd $(DSP_OUT)/linux-firmware/qcom/qcs8300 && \
+		cp -L $(DSP_FW_FILES) $(DSP_OVERLAY)/lib/firmware/qcom/qcs8300/
+	for d in adsp cdsp gdsp0; do \
+		printf 'Install: %s\t%s\t%s\n' $(DSP_BIN_SRC) $$d $$d-$(DSP_BIN_BUILD); \
+		printf 'Link: %s\t%s\n' $(DSP_BIN_SRC)/dsp/$$d $(DSP_BIN_BOARD)/dsp/$$d; \
+	done > $(DSP_OUT)/monaco-config.txt
+	cd $(DSP_OUT)/dsp-binaries && \
+		./scripts/install.sh $(DSP_OUT)/monaco-config.txt $(DSP_OVERLAY)/usr/share/qcom
+	install -m 0644 $(DSP_OUT)/dsp-binaries/conf.d/$(DSP_BIN_CONF) \
+		$(DSP_OVERLAY)/usr/share/qcom/conf.d/
+	grep -qx '  $(DSP_DT_MODEL):' $(DSP_OVERLAY)/usr/share/qcom/conf.d/$(DSP_BIN_CONF)
+	grep -qx '    DSP_LIBRARY_PATH: $(DSP_BIN_BOARD)/dsp' \
+		$(DSP_OVERLAY)/usr/share/qcom/conf.d/$(DSP_BIN_CONF)
+	python3 $(CURDIR)/qcom/scripts/dsp-runtime-check.py $(DSP_OUT)/dsp-binaries \
+		$(foreach p,$(DSP_PAIRS),$(DSP_OVERLAY)/lib/firmware/qcom/qcs8300/$(word 1,$(subst :, ,$(p))):$(DSP_OVERLAY)/usr/share/qcom/$(DSP_BIN_BOARD)/dsp/$(word 2,$(subst :, ,$(p))))
+
+dsp-firmware-clean:
+	rm -rf $(DSP_OUT)
 
 ################################################################################
 # UKI and ESP (efi.bin)
