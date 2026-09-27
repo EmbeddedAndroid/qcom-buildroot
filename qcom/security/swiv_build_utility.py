@@ -969,6 +969,10 @@ def get_swiv_segment_address(target):
                     PIMEM_BASE_ADDR +
                     PIMEM_DEVCFG_SIZE +
                     XBL_SEC_PIMEM_SIZE)
+        case "monaco":
+            # After the monitor pIMEM code and the debug policy page, as in
+            # the QCS8300 TZ release image.
+            return 0x1C041000
         case _:
             print("Unknown target. Aborting!")
             sys.exit(2)
