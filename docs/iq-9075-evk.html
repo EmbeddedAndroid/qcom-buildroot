@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IQ-9075 EVK · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="iq9075">
+<main class="rtd-doc">
+
+  <a href="https://www.qualcomm.com/developer/hardware/qualcomm-iq-9075-evaluation-kit-evk" style="text-decoration:none;">
+    <div style="position:relative; max-width:960px; margin:14px 0 22px;">
+      <img src="img/iq-9075-evk-banner.jpg"
+           alt="Qualcomm IQ-9075 Evaluation Kit (EVK), Dragonwing board"
+           style="width:100%; height:auto; display:block; border-radius:8px;">
+      <span style="position:absolute; left:3%; top:50%; transform:translateY(-50%);
+                   color:#fff; font-weight:700; line-height:1.15;
+                   font-size:clamp(20px, 3.2vw, 40px);
+                   text-shadow:0 2px 10px rgba(0,0,0,.6);">Open Boot Firmware<br>
+        <span style="font-weight:400; font-size:.5em; line-height:1.2;">IQ-9075 Evaluation Kit</span></span>
+    </div>
+  </a>
+
+  <h1 id="iq-9075-evk">Qualcomm IQ-9075 EVK</h1>
+  <p>
+    The <a href="https://www.qualcomm.com/developer/hardware/qualcomm-iq-9075-evaluation-kit-evk">IQ-9075 Evaluation Kit</a>
+    is built around the Qualcomm Lemans SoC (SA8775P / QCS9075) and boots from UFS.
+    <code>lemans.mk</code> builds its open boot chain and a Buildroot distribution;
+    the <a href="quick-start.html">quick start</a> walks through it and the
+    <a href="lemans-focused.html">focused</a> and
+    <a href="lemans.html">comprehensive</a> decks go into depth.
+  </p>
+
+  <table class="rtd-table">
+    <tr><th>Makefile</th><td><code>lemans.mk</code>, board files in <code>lemans/</code></td></tr>
+    <tr><th>Manifest</th><td><code>lemans.xml</code></td></tr>
+    <tr><th>Storage</th><td>UFS, 6 LUNs (LUN 0: <code>efi</code> and rootfs; LUNs 1 to 4: XBL, CDT and the firmware partitions; LUN 5: persist)</td></tr>
+    <tr><th>Console</th><td><code>ttyMSM0</code>, 115200 8N1</td></tr>
+  </table>
+
+  <h2 id="boot-chain">Boot chain</h2>
+<pre>XBL -&gt; U-Boot SPL (tz) -&gt; BL31 -&gt; OP-TEE -&gt; U-Boot proper -&gt; systemd-boot -&gt; UKI</pre>
+  <p>
+    U-Boot SPL replaces TF-A BL2 as the first open-source stage; it is linked at
+    <code>0x1c100000</code>. It reads the FIT image in the <code>uefi</code> partition,
+    loads BL31 at <code>0x1c200000</code>, OP-TEE at <code>0x1c300000</code> and U-Boot
+    proper at <code>0xaf000000</code>, and jumps to BL31, which starts OP-TEE and then
+    U-Boot proper.
+  </p>
+  <table class="rtd-table">
+    <tr><th>Image</th><th>Partition</th><th>Contents</th><th>Target</th></tr>
+    <tr><td><code>tz.mbn</code></td><td><code>tz</code></td><td>U-Boot SPL (<code>qcom_lemans_spl_defconfig</code>) with a SWIV segment, signed with qtestsign</td><td><code>make bootimage</code></td></tr>
+    <tr><td><code>uefi.elf</code></td><td><code>uefi</code></td><td>FIT image (despite the name): BL31, OP-TEE and U-Boot proper (<code>qcom_lemans_defconfig</code>) with its control DTB</td><td><code>make bootimage</code></td></tr>
+    <tr><td><code>efi.bin</code></td><td><code>efi</code></td><td>FAT32 ESP: systemd-boot as <code>EFI/BOOT/bootaa64.efi</code> and the UKI as <code>EFI/Linux/uki.efi</code></td><td><code>make efi</code></td></tr>
+  </table>
+
+  <h2 id="sources">Sources</h2>
+  <table class="rtd-table">
+    <tr><th>Tree</th><th>Repository (lemans.xml)</th><th>Build</th></tr>
+    <tr><td>TF-A</td><td>qualcomm-linux/trusted-firmware-a, <code>qcom-next</code></td><td><code>PLAT=lemans_evk SPD=opteed</code>, BL31 only</td></tr>
+    <tr><td>OP-TEE</td><td>OP-TEE/optee_os, <code>master</code></td><td><code>PLATFORM=qcom-lemans</code>, with the <code>qcom_pas</code> early TA</td></tr>
+    <tr><td>U-Boot</td><td>qualcomm-linux/u-boot, <code>qcom-next</code></td><td>SPL and proper, plus the overlays in <code>lemans/patches/u-boot/</code></td></tr>
+    <tr><td>Linux</td><td>qualcomm-linux/kernel-topics, <code>tech/security/optee</code></td><td>arm64 <code>defconfig</code> with OP-TEE, PAS, FastRPC and no modules; <code>lemans-evk-el2.dtb</code></td></tr>
+  </table>
+  <p>Each tree is pinned to a revision in the manifest.</p>
+
+  <h2 id="build">Build</h2>
+<pre>make toolchains
+make all          # components and efi.bin
+make bootimage    # tz.mbn + uefi.elf</pre>
+  <p>
+    See the <a href="quick-start.html">quick start</a> for iterating on one
+    component and for the stock Yocto BSP flows.
+  </p>
+
+  <h2 id="flash">Flash</h2>
+  <p>
+    The board has to be in EDL mode on the build host; Qualcomm's
+    <a href="https://dragonwingdocs.qualcomm.com/Linux/devices/iq9075-evk/update-software/flash-over-qli">Flash over QLI guide</a>
+    describes how, and how to install qdl.
+  </p>
+<pre>make fetch-blobs    # stock boot binaries, CDT and partition tables
+make flash-loader   # LUNs 1 to 5: boot chain, tz.mbn and uefi.elf from the build
+make flash-kernel   # LUN 0: efi.bin</pre>
+  <p>
+    <code>flash-loader</code> also writes the QUP firmware (<code>qupv3fw.elf</code>)
+    into the <code>qupfw</code> partitions, which U-Boot needs for the GENI serial
+    engines. Recovery (<code>flash-ufs-provision</code>), the SAIL NOR image
+    (<code>flash-sail</code>) and packages for flashing from Windows
+    (<code>edl-package</code>, <code>edl-bootloader</code>) are described in the
+    <a href="quick-start.html">quick start</a>, the
+    <a href="lemans.html">comprehensive deck</a> and <code>make help</code>.
+  </p>
+
+  <h2 id="tests">On the board</h2>
+  <p>
+    The rootfs carries xtest and <code>qcom-tests</code>, which runs the ADSP and
+    CDSP FastRPC tests (the DSPs are started through the OP-TEE PAS service), a
+    video encode and decode round trip and a CPU stress test.
+  </p>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>
