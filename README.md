@@ -16,6 +16,9 @@ top-level makefile and subdirectory.
 |----------|-----|-------|----------|
 | Lemans | QCS9100 | Qualcomm IQ-9075 EVK | `lemans.mk` |
 
+Files shared by the Qualcomm platforms (SWIV tool, UKI stub, qrtr-ns and
+tqftpserv init scripts) live in `qcom/`.
+
 ## Quick start
 
 ```sh
