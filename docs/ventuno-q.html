@@ -86,9 +86,9 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
     <a href="signing.html">Signing</a>). SPL has to fit where XBL enters the TZ
     image, <code>0x14680000</code> to <code>0x1469a000</code> in system IMEM, with
     its BSS and stack; it prints its banner on the debug UART XBL leaves set up.
-    SPL needs a U-Boot tree with <code>qcom_monaco_spl_defconfig</code>, which the
-    tree <code>monaco.xml</code> pins does not have yet, and it has not been run
-    on a board yet.
+    The U-Boot tree pinned by <code>monaco.xml</code> carries
+    <code>qcom_monaco_spl_defconfig</code>, and this SPL path has been tested on
+    the board.
   </p>
 
   <h2 id="sources">Sources</h2>
