@@ -125,6 +125,11 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
     <tr><td>Linux</td><td>linux-next with Monaco and VENTUNO Q patches not submitted
         yet (see below).</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>
+    <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>), with the patches in
+        <code>monaco/buildroot-patches/</code>, which the <code>buildroot</code>
+        target applies once: Mesa 25.1.8 from Buildroot 2025.08, since Mesa 25.0
+        does not know the Adreno 623.</td>
+        <td>The rootfs, a gzip-compressed cpio used as the initramfs</td></tr>
   </table>
   <p>
     The board device tree (<code>monaco-arduino-monza.dts</code>) and the Monaco

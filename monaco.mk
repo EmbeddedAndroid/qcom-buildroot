@@ -52,8 +52,8 @@
 #   clean          clean all components and monaco/output/
 #
 # Component targets: optee-os, u-boot, u-boot-spl, tfa, fip, uefi, linux,
-# linux-defconfig, buildroot, dsp-firmware, qtestsign-fetch, and the matching
-# *-clean targets.
+# linux-defconfig, buildroot, buildroot-patches, dsp-firmware,
+# qtestsign-fetch, and the matching *-clean targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
@@ -219,8 +219,8 @@ help:
 	@echo "  clean          clean all components and monaco/output/"
 	@echo ""
 	@echo "Component targets: optee-os u-boot u-boot-spl tfa fip uefi linux"
-	@echo "  linux-defconfig buildroot dsp-firmware qtestsign-fetch, and the"
-	@echo "  matching *-clean targets"
+	@echo "  linux-defconfig buildroot buildroot-patches dsp-firmware"
+	@echo "  qtestsign-fetch, and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TZ_IMAGE TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS"
 	@echo "  U_BOOT_SPL_CONFIG LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS;"
@@ -528,6 +528,29 @@ linux: | $(MONACO_OUT)
 linux-clean:
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) clean
 	rm -f $(LINUX_DTB)
+
+################################################################################
+# Buildroot patches: monaco/buildroot-patches/*.patch, applied in order to the
+# Buildroot tree (common.xml pins 2025.05) before it builds. A patch that
+# reverses cleanly is already applied and is skipped.
+#   0001  Mesa 25.1.8 from Buildroot 2025.08; Mesa 25.0 does not know the
+#         Adreno 623
+################################################################################
+BR_PATCHES = $(sort $(wildcard $(CURDIR)/monaco/buildroot-patches/*.patch))
+
+.PHONY: buildroot-patches
+
+buildroot: buildroot-patches
+
+buildroot-patches:
+	@for p in $(BR_PATCHES); do \
+		if git -C $(ROOT)/buildroot apply -R --check $$p 2>/dev/null; then \
+			echo "buildroot: $${p##*/} already applied"; \
+		else \
+			echo "buildroot: applying $${p##*/}"; \
+			git -C $(ROOT)/buildroot apply $$p || exit 1; \
+		fi; \
+	done
 
 ################################################################################
 # DSP firmware and FastRPC runtime, fetched at pinned revisions into
