@@ -143,6 +143,17 @@ BR2_PACKAGE_STRESS_NG           = y
 BR2_PACKAGE_ALSA_UTILS          = y
 BR2_PACKAGE_ALSA_UTILS_APLAY    = y
 BR2_PACKAGE_ALSA_UTILS_AMIXER   = y
+# GPU userspace: Mesa freedreno with EGL, OpenGL ES and GBM (Mesa 25.1.8, see
+# buildroot-patches), and egl-readback, which renders on the GPU and checks
+# the pixels it reads back. The GPU firmware comes from the dsp-firmware
+# target.
+BR2_PACKAGE_MESA3D                          = y
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_FREEDRENO = y
+BR2_PACKAGE_MESA3D_OPENGL_EGL               = y
+BR2_PACKAGE_MESA3D_OPENGL_ES                = y
+BR2_PACKAGE_MESA3D_GBM                      = y
+BR2_PACKAGE_LIBDRM                          = y
+BR2_PACKAGE_EGL_READBACK_EXT                = y
 BR2_ROOTFS_OVERLAY              = $(CURDIR)/qcom/overlay $(CURDIR)/monaco/overlay $(DSP_OVERLAY)
 
 ################################################################################
@@ -570,12 +581,16 @@ buildroot-patches:
 # build is installed under the Arduino Monza path instead;
 # qcom/scripts/dsp-runtime-check.py checks the pairing. The same revision
 # provides the QUP serial engine firmware (qupv3fw.elf), which Linux loads
-# for the engines nothing earlier in the boot has set up.
+# for the engines nothing earlier in the boot has set up, and the Adreno 623
+# GPU firmware the msm driver loads from /lib/firmware/qcom (GPU_FW_FILES:
+# the GMU firmware and the SQE microcode, under LICENSE.qcom). The EL2 overlay
+# disables the zap shader, so its firmware is not installed.
 ################################################################################
 # GitLab serves partial clones; git.kernel.org sends the whole tree.
 DSP_FW_REPO   ?= https://gitlab.com/kernel-firmware/linux-firmware.git
 DSP_FW_REV    ?= 664f8b6adeba20be0960d9cb1b2ad8c5a4d7e0e3
 DSP_FW_FILES   = adsp.mbn adspr.jsn adspua.jsn cdsp0.mbn cdspr.jsn gpdsp0.mbn qupv3fw.elf
+GPU_FW_FILES   = qcom/a623_gmu.bin qcom/a650_sqe.fw
 # The AudioReach topology the sound card requests (qcom/qcs8300/<model>-tplg.bin)
 # is newer than DSP_FW_REV, so it comes from its own pinned revision.
 DSP_TPLG_REV  ?= e8a8bc636565a2874b2123684b8ef23f30687c27
@@ -620,6 +635,9 @@ dsp-firmware:
 	cp $(DSP_OUT)/linux-firmware/qcom/NOTICE.txt $(DSP_OVERLAY)/lib/firmware/qcom/
 	cd $(DSP_OUT)/linux-firmware/qcom/qcs8300 && \
 		cp -L $(DSP_FW_FILES) $(DSP_OVERLAY)/lib/firmware/qcom/qcs8300/
+	for f in LICENSE.qcom $(GPU_FW_FILES); do \
+		$(DSP_FW_GIT) show $(DSP_FW_REV):$$f > $(DSP_OVERLAY)/lib/firmware/$$f || exit 1; \
+	done
 	$(DSP_FW_GIT) cat-file -e $(DSP_TPLG_REV) 2>/dev/null || \
 		$(DSP_FW_GIT) fetch -q --depth=1 --filter=blob:none $(DSP_FW_REPO) $(DSP_TPLG_REV)
 	$(DSP_FW_GIT) show $(DSP_TPLG_REV):$(DSP_TPLG) > $(DSP_OVERLAY)/lib/firmware/$(DSP_TPLG)

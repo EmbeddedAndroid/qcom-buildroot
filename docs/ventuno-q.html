@@ -111,7 +111,8 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
         (<a href="https://review.trustedfirmware.org/q/topic:qti-monaco">Gerrit topic qti-monaco</a>)
         on the hoya CPUCP start series (Gerrit 54862/54863), and the SAIL
         notification (Gerrit 54579). Not submitted yet: the VENTUNO Q reset fixes,
-        and the Monaco clock back-end and RPMh data the ADSP needs.</td>
+        the Monaco clock back-end and RPMh data the ADSP needs, and the GPU SMMU
+        aperture the GPU needs.</td>
         <td><code>PLAT=monza SPD=opteed</code>, <code>bl2</code> and <code>fip</code> (<code>bl31</code> for SPL)</td></tr>
     <tr><td>OP-TEE</td><td>Monaco platform support
         (<a href="https://github.com/OP-TEE/optee_os/pull/8053">optee_os pull request 8053</a>).
@@ -236,6 +237,23 @@ qdl --storage emmc prog_firehose_ddr.elf write efi efi.bin</pre>
 <pre>amixer -c arduinomonza cset name='LPI_MI2S_RX_0 Audio Mixer MultiMedia1' on
 amixer -c arduinomonza cset name='Headphone Switch' on
 aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
+
+  <h2 id="gpu">GPU</h2>
+  <p>The rootfs carries, for the Adreno 623:</p>
+  <ul>
+    <li>Mesa with the freedreno driver: EGL, OpenGL ES and GBM;</li>
+    <li>the GMU firmware (<code>qcom/a623_gmu.bin</code>) and the SQE microcode
+      (<code>qcom/a650_sqe.fw</code>) from linux-firmware;</li>
+    <li><code>egl-readback</code>: renders on the GPU through the render node,
+      without a display, reads the pixels back and checks them, then times 500
+      frames. It exits 0 only if the GPU drew the expected pixels.</li>
+  </ul>
+  <p>
+    The EL2 overlay disables the zap shader: Linux takes the GPU out of secure
+    mode itself, with no zap shader firmware. The GPU SMMU aperture, through
+    which the GPU switches page tables per process, is set up by TF-A BL31 at
+    boot; without it the first draw hangs the GPU.
+  </p>
 
 </main>
 <script src="_rtd.js"></script>
