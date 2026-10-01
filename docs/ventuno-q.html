@@ -125,7 +125,7 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
         SPL: <code>qcom_monaco_spl_defconfig</code></td></tr>
     <tr><td>Linux</td><td>linux-next with Monaco and VENTUNO Q patches not submitted
         yet (see below).</td>
-        <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>
+        <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>), with the patches in
         <code>monaco/buildroot-patches/</code>, which the <code>buildroot</code>
         target applies once: Mesa 25.1.8 from Buildroot 2025.08, since Mesa 25.0
@@ -189,6 +189,22 @@ make tz-qti-sign QTI_SIGN_DIR=... CASS_CAPABILITY=... \
     <code>/etc/issue</code>, so the console shows which build is running. The
     build fails if an image lacks it, and
     <code>monaco/output/build-info.txt</code> records the identifier of each image.
+  </p>
+
+  <h3 id="memtest">Memory test</h3>
+  <p>
+    The kernel is built with <code>CONFIG_MEMTEST</code>. With
+    <code>memtest=&lt;N&gt;</code> on its command line it writes and checks N
+    patterns over all free memory early in the boot, before it starts the other
+    CPUs, and reserves any range that fails. It does nothing without
+    <code>memtest=</code>.
+  </p>
+<pre>make efi LINUX_CMDLINE="root=/dev/ram0 rw console=ttyMSM0,115200 earlycon qcom_scm.download_mode=1 memtest=4"</pre>
+  <p>
+    The kernel log then has an <code>early_memtest: # of tests: 4</code> line, one
+    line per memory range and pattern, and a <code>bad mem addr</code> line for each
+    failing range; <code>/proc/meminfo</code> reports the size reserved as
+    <code>EarlyMemtestBad</code>.
   </p>
 
   <h2 id="flash">Flash</h2>

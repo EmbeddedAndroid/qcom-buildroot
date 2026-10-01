@@ -477,8 +477,10 @@ tz-qti-sign:
 # board needs is built in.
 #
 # LINUX_DSP_CONFIGS: PAS remoteprocs with the OP-TEE backend, GLINK over
-# SMEM, QRTR and FastRPC for the ADSP, CDSP and GPDSP. linux fails if any of
-# them is not built in.
+# SMEM, QRTR and FastRPC for the ADSP, CDSP and GPDSP.
+# LINUX_TEST_CONFIGS: MEMTEST, the early memory test that memtest=<N> on the
+# kernel command line runs (N patterns over all free memory).
+# linux fails if any of them is not built in.
 ################################################################################
 LINUX_DSP_CONFIGS = \
 	REMOTEPROC QCOM_Q6V5_PAS QCOM_SYSMON QCOM_PAS QCOM_PAS_TEE QCOM_SCM \
@@ -486,6 +488,7 @@ LINUX_DSP_CONFIGS = \
 	QCOM_SMSM QCOM_IPCC QCOM_AOSS_QMP QCOM_RPMHPD QCOM_COMMAND_DB \
 	QRTR QRTR_SMD QCOM_PD_MAPPER QCOM_FASTRPC \
 	CMA DMA_CMA DMABUF_HEAPS DMABUF_HEAPS_SYSTEM DMABUF_HEAPS_CMA
+LINUX_TEST_CONFIGS = MEMTEST
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
 LINUX_DT         = monaco-arduino-monza
@@ -513,7 +516,7 @@ linux-defconfig:
 		-e KVM \
 		-d LOCALVERSION_AUTO \
 		-d MODULES \
-		$(addprefix -e ,$(LINUX_DSP_CONFIGS))
+		$(addprefix -e ,$(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
 # The base DTB is built with symbols (-@) so the EL2 overlay can be applied.
@@ -521,7 +524,7 @@ linux: | $(MONACO_OUT)
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) linux-defconfig; \
 	fi
-	@for c in $(LINUX_DSP_CONFIGS); do \
+	@for c in $(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS); do \
 		grep -qx "CONFIG_$$c=y" $(LINUX_PATH)/.config || \
 		{ echo "ERROR: CONFIG_$$c is not built in: run 'make linux-defconfig'"; exit 1; }; \
 	done
