@@ -323,6 +323,20 @@ export MAX_SMP=$(nproc) TIMEOUT=0
     starts on: run the <code>pmu-*</code> tests with the VM held on one cluster,
     in a cgroup v2 cpuset.
   </p>
+  <p>
+    <code>/opt/kvm-guest</code> holds a small Linux guest: a 6.18 LTS kernel built
+    for a virtual machine with a virtio console, and an initramfs with BusyBox.
+    Its init prints a <code>kvm-guest: ready</code> line with the vCPU count,
+    the kernel release and the uptime, then runs a shell on the console;
+    <code>poweroff -f</code> ends the VM.
+  </p>
+<pre>lkvm run -k /opt/kvm-guest/Image -i /opt/kvm-guest/initramfs.cpio.gz \
+    -c 2 -m 256 --console virtio --network mode=none</pre>
+  <p>
+    kvmtool reads console input only from a terminal. A script that drives the
+    guest console runs it on a pty, with <code>socat</code> (in the rootfs):
+  </p>
+<pre>socat STDIO EXEC:./run-guest.sh,pty,setsid,ctty,stderr</pre>
 
 </main>
 <script src="_rtd.js"></script>

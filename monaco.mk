@@ -163,10 +163,14 @@ BR2_PACKAGE_MESA3D_GBM                      = y
 BR2_PACKAGE_LIBDRM                          = y
 BR2_PACKAGE_EGL_READBACK_EXT                = y
 # KVM: kvmtool and the KVM unit tests built for it, with their runner (bash)
-# in /opt/kvm-unit-tests.
+# in /opt/kvm-unit-tests, and a small Linux guest (kernel and BusyBox
+# initramfs) in /opt/kvm-guest. kvmtool reads console input only from a
+# terminal; socat gives it a pty when a script drives the guest console.
 BR2_PACKAGE_BUSYBOX_SHOW_OTHERS = y
 BR2_PACKAGE_KVMTOOL             = y
 BR2_PACKAGE_KVM_UNIT_TESTS_EXT  = y
+BR2_PACKAGE_KVM_GUEST_EXT       = y
+BR2_PACKAGE_SOCAT               = y
 BR2_ROOTFS_OVERLAY              = $(CURDIR)/qcom/overlay $(CURDIR)/monaco/overlay $(DSP_OVERLAY)
 
 ################################################################################
