@@ -13,6 +13,14 @@
 # decoders that check a hardware encode, testsrc2 (lavfi, whose frames reach
 # ffmpeg as wrapped_avframe packets), the psnr filter, framemd5 and the raw
 # H.264, HEVC and IVF formats.
+#
+# The patches in qcom/video/buildroot-patches are applied in order to the
+# Buildroot tree before it builds; one that reverses cleanly is already
+# applied and is skipped.
+#   0001  FFmpeg 7.1.2 instead of 6.1.2: at the end of the input the 6.1
+#         ffmpeg tool holds every frame the decoder returns until it has
+#         drained, so a V4L2 decoder that needs a CAPTURE buffer back to
+#         finish never does (venus, H.264)
 ################################################################################
 QCOM_VIDEO_TEST ?= y
 
@@ -45,5 +53,18 @@ video-streams:
 video-streams-clean:
 	rm -rf $(QCOM_VIDEO_STREAMS_DIR)
 
-buildroot: video-streams
+QCOM_VIDEO_BR_PATCHES = $(sort $(wildcard $(CURDIR)/qcom/video/buildroot-patches/*.patch))
+
+.PHONY: video-buildroot-patches
+video-buildroot-patches:
+	@for p in $(QCOM_VIDEO_BR_PATCHES); do \
+		if git -C $(ROOT)/buildroot apply -R --check $$p 2>/dev/null; then \
+			echo "buildroot: $${p##*/} already applied"; \
+		else \
+			echo "buildroot: applying $${p##*/}"; \
+			git -C $(ROOT)/buildroot apply $$p || exit 1; \
+		fi; \
+	done
+
+buildroot: video-streams video-buildroot-patches
 endif

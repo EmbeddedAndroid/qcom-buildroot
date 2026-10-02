@@ -132,11 +132,16 @@ repo sync -j4 --no-clone-bundle</pre>
   </p>
 <pre>include qcom/video/video.mk</pre>
   <ul>
-    <li>FFmpeg (Buildroot) with only what the test runs: the H.264, HEVC and
-      VP9 V4L2 mem2mem decoders, the H.264 and HEVC mem2mem encoders, the
-      software decoders that check an encode, <code>testsrc2</code>, the
-      <code>psnr</code> filter and <code>framemd5</code>. Its configure step
-      fails if the V4L2 mem2mem support cannot be built.</li>
+    <li>FFmpeg 7.1.2 (Buildroot, bumped from 6.1.2 by
+      <code>qcom/video/buildroot-patches</code>) with only what the test
+      runs: the H.264, HEVC and VP9 V4L2 mem2mem decoders, the H.264 and HEVC
+      mem2mem encoders, the software decoders that check an encode,
+      <code>testsrc2</code>, the <code>psnr</code> filter and
+      <code>framemd5</code>. Its configure step fails if the V4L2 mem2mem
+      support cannot be built. The 6.1 <code>ffmpeg</code> tool holds every
+      frame a decoder returns at the end of the input until the decoder has
+      drained, which deadlocks a V4L2 decoder that needs a CAPTURE buffer
+      back to finish (venus, H.264); 7.0 and later keep returning them.</li>
     <li>In <code>/usr/share/video-codec</code>: an H.264 high and an HEVC main
       stream at 1280x720 and a VP9 stream at 640x480, 60 frames each, with
       <code>&lt;stream&gt;.md5</code> holding the MD5 of every frame of their
