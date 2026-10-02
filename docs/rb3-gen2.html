@@ -108,7 +108,11 @@
     <tr><td>Linux</td><td>The Qualcomm kernel topic branch with the OP-TEE
         support (<code>tech/security/optee</code> in
         <a href="https://github.com/qualcomm-linux/kernel-topics">kernel-topics</a>,
-        as for the IQ-9075 EVK), which carries the Kodiak EL2 overlay.</td>
+        as for the IQ-9075 EVK), which carries the Kodiak EL2 overlay, with the
+        patches in <code>kodiak/patches/linux/</code> on top: two fixes in the
+        PAS remote processor code with the OP-TEE backend and one in the ADSP
+        audio clock driver, without which a DSP cannot be stopped and started
+        again.</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST, the PAS
         remote processors with the OP-TEE backend, and no modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
         Kodiak EL2 overlay)</td></tr>

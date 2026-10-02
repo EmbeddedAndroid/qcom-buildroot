@@ -46,9 +46,9 @@
 #   flash-lava     flash-loader and flash-kernel on a LAVA lab board
 #   clean          clean all components and kodiak/output/
 #
-# Component targets: optee-os, u-boot, tfa, fip, linux, linux-defconfig,
-# buildroot, dsp-firmware, qtestsign-fetch, qtiseclib-fetch, and the matching
-# *-clean targets.
+# Component targets: optee-os, u-boot, tfa, fip, linux-patches, linux,
+# linux-defconfig, buildroot, dsp-firmware, qtestsign-fetch, qtiseclib-fetch,
+# and the matching *-clean targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
@@ -204,9 +204,9 @@ help:
 	@echo "                 (asks: interactive with the serial console, or flash-only)"
 	@echo "  clean          clean all components and kodiak/output/"
 	@echo ""
-	@echo "Component targets: optee-os u-boot tfa fip linux linux-defconfig"
-	@echo "  buildroot dsp-firmware qtestsign-fetch qtiseclib-fetch, and the matching"
-	@echo "  *-clean targets"
+	@echo "Component targets: optee-os u-boot tfa fip linux-patches linux"
+	@echo "  linux-defconfig buildroot dsp-firmware qtestsign-fetch qtiseclib-fetch,"
+	@echo "  and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TF_A_FLAGS TF_A_DEBUG QTISECLIB DSP_FW_REPO DSP_FW_REV"
 	@echo "  U_BOOT_CONFIGS U_BOOT_DEVICE_TREE LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE"
@@ -386,6 +386,11 @@ tz-qti-sign:
 ################################################################################
 # Linux kernel
 #
+# The pinned kernel with the patches in kodiak/patches/linux/ on top: the
+# fixes that let the DSPs, PAS remote processors with the OP-TEE backend, be
+# stopped and started again. linux-patches commits them with git am, once: it skips
+# them when HEAD is the last patch (same patch ID).
+#
 # linux-defconfig applies LINUX_DEFCONFIG and the options below; linux runs it
 # when there is no .config. The kernel has no modules, so everything the
 # board needs is built in.
@@ -403,15 +408,27 @@ LINUX_DSP_CONFIGS = \
 LINUX_TEST_CONFIGS = MEMTEST
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
+LINUX_PATCHES    = $(sort $(wildcard $(CURDIR)/kodiak/patches/linux/*.patch))
 # Linux runs at EL2 with no hypervisor underneath: the Kodiak EL2 overlay,
 # applied by the kernel build, hands it the resources a hypervisor would own.
 LINUX_DT         = qcs6490-rb3gen2-el2
 LINUX_DTB        = $(KODIAK_OUT)/$(LINUX_DT).dtb
 LINUX_IMAGE      = $(LINUX_PATH)/arch/arm64/boot/vmlinuz.efi
 
-.PHONY: linux-defconfig linux linux-clean
+.PHONY: linux-patches linux-defconfig linux linux-clean
 
-linux-defconfig:
+linux-patches:
+	@last=$$(git patch-id --stable < $(lastword $(LINUX_PATCHES)) | cut -d' ' -f1); \
+	head=$$(git -C $(LINUX_PATH) show HEAD | git patch-id --stable | cut -d' ' -f1); \
+	if [ "$$last" = "$$head" ]; then \
+		echo "linux: kodiak/patches/linux already applied"; \
+	else \
+		git -C $(LINUX_PATH) -c user.name=kodiak.mk -c user.email=kodiak.mk@localhost \
+			am -q $(LINUX_PATCHES) && \
+		echo "linux: applied $(words $(LINUX_PATCHES)) patches from kodiak/patches/linux"; \
+	fi
+
+linux-defconfig: linux-patches
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) mrproper
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) $(LINUX_DEFCONFIG)
 	$(LINUX_EXPORTS) $(LINUX_PATH)/scripts/config --file $(LINUX_PATH)/.config \
@@ -429,7 +446,7 @@ linux-defconfig:
 		$(addprefix -e ,$(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
-linux: | $(KODIAK_OUT)
+linux: linux-patches | $(KODIAK_OUT)
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) linux-defconfig; \
 	fi

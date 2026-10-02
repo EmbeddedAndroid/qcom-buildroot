@@ -1,0 +1,70 @@
+From 7b922bcff4e82966372c95d47ab89686c7dd622d Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Fri, 25 Sep 2026 00:16:26 -0400
+Subject: [PATCH 2/3] remoteproc: qcom: pas: pass no resource table when the
+ firmware has none
+
+qcom_pas_parse_firmware() passes rproc->table_ptr and rproc->table_sz
+to qcom_pas_get_rsc_table() even when rproc_elf_load_rsc_table() found
+no resource table in the firmware. That only works on the first boot,
+when both are still zero. After it, table_sz holds the size of the
+table the PAS service returned: stopping the remote processor, or
+failing to start it, frees the cached table and clears table_ptr but
+leaves table_sz alone. The next start then hands a NULL table with a
+non-zero size to the PAS backend. The SCM backend replaces a NULL table
+with an empty one, which hides this, but the TEE backend copies from
+it. Stopping and starting the CDSP on a QCS8300 board with the TEE PAS
+backend:
+
+  remoteproc remoteproc2: powering up cdsp
+  pc : __pi_memcpy_generic+0x110/0x22c
+  lr : qcom_pas_tee_get_rsc_table+0xf4/0x25c
+  Call trace:
+   __pi_memcpy_generic+0x110/0x22c (P)
+   qcom_pas_get_rsc_table+0x38/0x60
+   qcom_pas_parse_firmware+0xa0/0x100
+   rproc_boot+0x2d4/0x380
+   state_store+0x40/0x100
+
+Use the table from the firmware only when it was found, and pass NULL
+and zero otherwise, as the comment in the function already describes.
+
+Fixes: a4584bff63c8 ("remoteproc: pas: Extend parse_fw callback to fetch resources via SMC call")
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ drivers/remoteproc/qcom_q6v5_pas.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/remoteproc/qcom_q6v5_pas.c b/drivers/remoteproc/qcom_q6v5_pas.c
+index d9cce1206835..f0e33ce40f69 100644
+--- a/drivers/remoteproc/qcom_q6v5_pas.c
++++ b/drivers/remoteproc/qcom_q6v5_pas.c
+@@ -486,7 +486,7 @@ static int qcom_pas_parse_firmware(struct rproc *rproc, const struct firmware *f
+ 	struct resource_table *table = NULL;
+ 	size_t output_rt_size;
+ 	void *output_rt;
+-	size_t table_sz;
++	size_t table_sz = 0;
+ 	int ret;
+ 
+ 	ret = qcom_register_dump_segments(rproc, fw);
+@@ -499,11 +499,12 @@ static int qcom_pas_parse_firmware(struct rproc *rproc, const struct firmware *f
+ 		return 0;
+ 
+ 	ret = rproc_elf_load_rsc_table(rproc, fw);
+-	if (ret)
++	if (ret) {
+ 		dev_dbg(&rproc->dev, "Failed to load resource table from firmware\n");
+-
+-	table = rproc->table_ptr;
+-	table_sz = rproc->table_sz;
++	} else {
++		table = rproc->table_ptr;
++		table_sz = rproc->table_sz;
++	}
+ 
+ 	/*
+ 	 * The resources consumed by Qualcomm remote processors fall into two categories:
+-- 
+2.47.3
+
