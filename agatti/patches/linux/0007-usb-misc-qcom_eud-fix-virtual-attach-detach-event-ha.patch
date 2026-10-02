@@ -1,0 +1,56 @@
+From 137db6f09fa85aba5bee12313e4c010ed5b2b963 Mon Sep 17 00:00:00 2001
+From: Elson Serrao <elson.serrao@oss.qualcomm.com>
+Date: Fri, 1 May 2026 10:06:33 -0700
+Subject: [PATCH 07/11] usb: misc: qcom_eud: fix virtual attach/detach event
+ handling
+
+EUD provides virtual USB attach/detach events to simulate cable
+plug/unplug while maintaining the physical debug connection. However,
+the current implementation incorrectly sets the USB role to HOST on
+virtual detach, which doesn't represent the disconnected state.
+
+Fix the virtual detach handling by setting the USB role to NONE
+instead of HOST, correctly representing the disconnected state.
+
+Signed-off-by: Elson Serrao <elson.serrao@oss.qualcomm.com>
+Reviewed-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+---
+ drivers/usb/misc/qcom_eud.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/usb/misc/qcom_eud.c b/drivers/usb/misc/qcom_eud.c
+index 67e935351fb3..c3f46f30f304 100644
+--- a/drivers/usb/misc/qcom_eud.c
++++ b/drivers/usb/misc/qcom_eud.c
+@@ -320,10 +320,26 @@ static irqreturn_t handle_eud_irq_thread(int irq, void *data)
+ 
+ 	path = chip->paths[chip->port_idx];
+ 
++	/*
++	 * EUD virtual attach/detach event handling for low power debugging:
++	 *
++	 * When EUD is enabled in debug mode, the device remains physically
++	 * connected to the PC throughout the debug session, keeping the USB
++	 * controller active. This prevents testing of low power scenarios that
++	 * require USB disconnection.
++	 *
++	 * EUD solves this by providing virtual USB attach/detach events while
++	 * maintaining the physical connection. These events are triggered from
++	 * the Host PC via the enumerated EUD control interface and delivered
++	 * to the EUD driver as interrupts.
++	 *
++	 * These notifications are forwarded to the USB controller through role
++	 * switch framework.
++	 */
+ 	if (chip->usb_attached)
+ 		ret = usb_role_switch_set_role(path->controller_sw, USB_ROLE_DEVICE);
+ 	else
+-		ret = usb_role_switch_set_role(path->controller_sw, USB_ROLE_HOST);
++		ret = usb_role_switch_set_role(path->controller_sw, USB_ROLE_NONE);
+ 	if (ret)
+ 		dev_err(chip->dev, "failed to set role switch\n");
+ 
+-- 
+2.55.0
+
+

@@ -1,0 +1,92 @@
+From 048d4ea5f783692c1de304bffeaffd4a231b6e37 Mon Sep 17 00:00:00 2001
+From: Elson Serrao <elson.serrao@oss.qualcomm.com>
+Date: Fri, 1 May 2026 10:06:34 -0700
+Subject: [PATCH 08/11] arm64: dts: qcom: kodiak: Describe EUD UTMI path using
+ child node
+
+The existing EUD description uses a legacy single-path representation
+that assumes uniform UTMI routing. This was sufficient for minimal
+configurations where the USB port operated only in device mode and role
+switching was not considered.
+
+Update the description to explicitly model the topology using eud path
+child node and add a role-switch declaration to reflect role-dependent
+UTMI routing. Also on this SoC, the EUD hardware intercepts only the
+primary UTMI path. So remove the USB endpoint mapping to the secondary
+controller and associate it with the primary controller.
+
+With the UTMI path now accurately described, enable the EUD by default.
+The connector side of the path is left unspecified, allowing board-level
+DTS files to describe the physical connector mapping.
+
+Signed-off-by: Elson Serrao <elson.serrao@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/kodiak.dtsi | 35 +++++++++++++++++-----------
+ 1 file changed, 21 insertions(+), 14 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/kodiak.dtsi b/arch/arm64/boot/dts/qcom/kodiak.dtsi
+index 347815e5983e..69c3e352f70a 100644
+--- a/arch/arm64/boot/dts/qcom/kodiak.dtsi
++++ b/arch/arm64/boot/dts/qcom/kodiak.dtsi
+@@ -4421,12 +4421,6 @@ usb_2: usb@8c00000 {
+ 			phy-names = "usb2-phy";
+ 			maximum-speed = "high-speed";
+ 			usb-role-switch;
+-
+-			port {
+-				usb2_role_switch: endpoint {
+-					remote-endpoint = <&eud_ep>;
+-				};
+-			};
+ 		};
+ 
+ 		qspi: spi@88dc000 {
+@@ -4753,16 +4747,28 @@ eud: eud@88e0000 {
+ 			      <0 0x88e2000 0 0x1000>;
+ 			interrupts-extended = <&pdc 11 IRQ_TYPE_LEVEL_HIGH>;
+ 
+-			status = "disabled";
++			#address-cells = <1>;
++			#size-cells = <0>;
+ 
+-			ports {
+-				#address-cells = <1>;
+-				#size-cells = <0>;
++			eud0: eud-path@0 {
++				reg = <0>;
++				usb-role-switch;
+ 
+-				port@0 {
+-					reg = <0>;
+-					eud_ep: endpoint {
+-						remote-endpoint = <&usb2_role_switch>;
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++
++					port@0 {
++						reg = <0>;
++						eud_usb: endpoint {
++							remote-endpoint = <&usb_1_dwc3_hs>;
++						};
++					};
++
++					port@1 {
++						reg = <1>;
++						eud_con: endpoint {
++						};
+ 					};
+ 				};
+ 			};
+@@ -4989,6 +4995,7 @@ port@0 {
+ 					reg = <0>;
+ 
+ 					usb_1_dwc3_hs: endpoint {
++						remote-endpoint = <&eud_usb>;
+ 					};
+ 				};
+ 
+-- 
+2.55.0
+
+

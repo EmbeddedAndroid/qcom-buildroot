@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# Load the kernel modules listed in /etc/modules (agatti.mk LINUX_MODULES_LOAD).
+#
+
+case "$1" in
+start)
+	printf "Loading kernel modules: "
+	if [ -f /etc/modules ] && modprobe -a $(grep -v '^#' /etc/modules); then
+		echo "OK"
+	else
+		echo "FAIL"
+	fi
+	;;
+stop|restart|reload)
+	;;
+*)
+	echo "Usage: $0 {start|stop|restart|reload}"
+	exit 1
+esac
+exit 0

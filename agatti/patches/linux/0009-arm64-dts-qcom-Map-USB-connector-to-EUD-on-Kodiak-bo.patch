@@ -1,0 +1,219 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Elson Serrao <elson.serrao@oss.qualcomm.com>
+Date: Fri, 1 May 2026 10:06:35 -0700
+Subject: [PATCH 09/11] arm64: dts: qcom: Map USB connector to EUD on Kodiak
+ boards
+
+On Kodiak-based boards, the primary USB connector is connected through
+the EUD on the High-Speed path. Update the board-level descriptions to
+map the USB connector endpoint to EUD, reflecting the intended hardware
+topology.
+
+Signed-off-by: Elson Serrao <elson.serrao@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts     | 10 +++++-----
+ arch/arm64/boot/dts/qcom/qcm6490-particle-tachyon.dts  | 10 +++++-----
+ arch/arm64/boot/dts/qcom/qcm6490-shift-otter.dts       | 10 +++++-----
+ arch/arm64/boot/dts/qcom/qcs6490-rb3gen2.dts           | 10 +++++-----
+ .../boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts     | 10 +++++-----
+ arch/arm64/boot/dts/qcom/sm7325-nothing-spacewar.dts   | 10 +++++-----
+ 6 files changed, 30 insertions(+), 30 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts b/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts
+index 455e5c9bb..b94220edc 100644
+--- a/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts
++++ b/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts
+@@ -97,7 +97,7 @@ port@0 {
+ 					reg = <0>;
+ 
+ 					pmic_glink_hs_in: endpoint {
+-						remote-endpoint = <&usb_1_dwc3_hs>;
++						remote-endpoint = <&eud_con>;
+ 					};
+ 				};
+ 
+@@ -1433,10 +1433,6 @@ &usb_1 {
+ 	status = "okay";
+ };
+ 
+-&usb_1_dwc3_hs {
+-	remote-endpoint = <&pmic_glink_hs_in>;
+-};
+-
+ &usb_1_hsphy {
+ 	vdda-pll-supply = <&vreg_l10c>;
+ 	vdda18-supply = <&vreg_l1c>;
+@@ -1476,3 +1472,7 @@ &wifi {
+ 	qcom,calibration-variant = "Fairphone_5";
+ 	status = "okay";
+ };
++
++&eud_con {
++	remote-endpoint = <&pmic_glink_hs_in>;
++};
+diff --git a/arch/arm64/boot/dts/qcom/qcm6490-particle-tachyon.dts b/arch/arm64/boot/dts/qcom/qcm6490-particle-tachyon.dts
+index bf18c4852..e9c0463da 100644
+--- a/arch/arm64/boot/dts/qcom/qcm6490-particle-tachyon.dts
++++ b/arch/arm64/boot/dts/qcom/qcm6490-particle-tachyon.dts
+@@ -74,7 +74,7 @@ port@0 {
+ 					reg = <0>;
+ 
+ 					pmic_glink_hs_in: endpoint {
+-						remote-endpoint = <&usb_1_dwc3_hs>;
++						remote-endpoint = <&eud_con>;
+ 					};
+ 				};
+ 
+@@ -826,10 +826,6 @@ &usb_1 {
+ 	status = "okay";
+ };
+ 
+-&usb_1_dwc3_hs {
+-	remote-endpoint = <&pmic_glink_hs_in>;
+-};
+-
+ &usb_1_hsphy {
+ 	vdda-pll-supply = <&vreg_l10c_0p88>;
+ 	vdda33-supply = <&vreg_l2b_3p072>;
+@@ -862,3 +858,7 @@ &usb_2_hsphy {
+ &usb_dp_qmpphy_out {
+ 	remote-endpoint = <&pmic_glink_ss_in>;
+ };
++
++&eud_con {
++	remote-endpoint = <&pmic_glink_hs_in>;
++};
+diff --git a/arch/arm64/boot/dts/qcom/qcm6490-shift-otter.dts b/arch/arm64/boot/dts/qcom/qcm6490-shift-otter.dts
+index 797f37596..650c4fbc1 100644
+--- a/arch/arm64/boot/dts/qcom/qcm6490-shift-otter.dts
++++ b/arch/arm64/boot/dts/qcom/qcm6490-shift-otter.dts
+@@ -84,7 +84,7 @@ port@0 {
+ 					reg = <0>;
+ 
+ 					pmic_glink_hs_in: endpoint {
+-						remote-endpoint = <&usb_1_dwc3_hs>;
++						remote-endpoint = <&eud_con>;
+ 					};
+ 				};
+ 
+@@ -952,10 +952,6 @@ &usb_1 {
+ 	status = "okay";
+ };
+ 
+-&usb_1_dwc3_hs {
+-	remote-endpoint = <&pmic_glink_hs_in>;
+-};
+-
+ &usb_1_hsphy {
+ 	vdda-pll-supply = <&vreg_l10c>;
+ 	vdda18-supply = <&vreg_l1c>;
+@@ -986,6 +982,10 @@ &usb_dp_qmpphy_out {
+ 	remote-endpoint = <&pmic_glink_ss_in>;
+ };
+ 
++&eud_con {
++	remote-endpoint = <&pmic_glink_hs_in>;
++};
++
+ &venus {
+ 	firmware-name = "qcom/qcm6490/SHIFT/otter/venus.mbn";
+ 
+diff --git a/arch/arm64/boot/dts/qcom/qcs6490-rb3gen2.dts b/arch/arm64/boot/dts/qcom/qcs6490-rb3gen2.dts
+index e3d2f0188..0ea7b838d 100644
+--- a/arch/arm64/boot/dts/qcom/qcs6490-rb3gen2.dts
++++ b/arch/arm64/boot/dts/qcom/qcs6490-rb3gen2.dts
+@@ -194,7 +194,7 @@ port@0 {
+ 					reg = <0>;
+ 
+ 					pmic_glink_hs_in: endpoint {
+-						remote-endpoint = <&usb_1_dwc3_hs>;
++						remote-endpoint = <&eud_con>;
+ 					};
+ 				};
+ 
+@@ -1303,14 +1303,14 @@ &usb_1 {
+ 	status = "okay";
+ };
+ 
+-&usb_1_dwc3_hs {
+-	remote-endpoint = <&pmic_glink_hs_in>;
+-};
+-
+ &usb_1_dwc3_ss {
+ 	remote-endpoint = <&usb_dp_qmpphy_usb_ss_in>;
+ };
+ 
++&eud_con {
++	remote-endpoint = <&pmic_glink_hs_in>;
++};
++
+ &usb_1_hsphy {
+ 	vdda-pll-supply = <&vreg_l10c_0p88>;
+ 	vdda33-supply = <&vreg_l2b_3p072>;
+diff --git a/arch/arm64/boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts b/arch/arm64/boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts
+index f47efca42..387c38aa8 100644
+--- a/arch/arm64/boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts
++++ b/arch/arm64/boot/dts/qcom/qcs6490-thundercomm-rubikpi3.dts
+@@ -93,7 +93,7 @@ port@0 {
+ 					reg = <0>;
+ 
+ 					pmic_glink_hs_in: endpoint {
+-						remote-endpoint = <&usb_1_dwc3_hs>;
++						remote-endpoint = <&eud_con>;
+ 					};
+ 				};
+ 
+@@ -1090,10 +1090,6 @@ &usb_1 {
+ 	status = "okay";
+ };
+ 
+-&usb_1_dwc3_hs {
+-	remote-endpoint = <&pmic_glink_hs_in>;
+-};
+-
+ &usb_1_hsphy {
+ 	vdda-pll-supply = <&vreg_l10c_0p88>;
+ 	vdda33-supply = <&vreg_l2b_3p072>;
+@@ -1127,6 +1123,10 @@ &usb_dp_qmpphy_out {
+ 	remote-endpoint = <&pmic_glink_ss_in>;
+ };
+ 
++&eud_con {
++	remote-endpoint = <&pmic_glink_hs_in>;
++};
++
+ &ufs_mem_hc {
+ 	reset-gpios = <&tlmm 175 GPIO_ACTIVE_LOW>;
+ 	vcc-supply = <&vreg_l7b_2p952>;
+diff --git a/arch/arm64/boot/dts/qcom/sm7325-nothing-spacewar.dts b/arch/arm64/boot/dts/qcom/sm7325-nothing-spacewar.dts
+index cb59c122f..a2e160f3f 100644
+--- a/arch/arm64/boot/dts/qcom/sm7325-nothing-spacewar.dts
++++ b/arch/arm64/boot/dts/qcom/sm7325-nothing-spacewar.dts
+@@ -99,7 +99,7 @@ port@0 {
+ 					reg = <0>;
+ 
+ 					pmic_glink_hs_in: endpoint {
+-						remote-endpoint = <&usb_1_dwc3_hs>;
++						remote-endpoint = <&eud_con>;
+ 					};
+ 				};
+ 
+@@ -1440,10 +1440,6 @@ &usb_1 {
+ 	status = "okay";
+ };
+ 
+-&usb_1_dwc3_hs {
+-	remote-endpoint = <&pmic_glink_hs_in>;
+-};
+-
+ &usb_1_hsphy {
+ 	vdda-pll-supply = <&vdd_a_usbhs_core>;
+ 	vdda18-supply = <&vdd_a_usbhs_1p8>;
+@@ -1459,3 +1455,7 @@ &venus {
+ &wifi {
+ 	status = "okay";
+ };
++
++&eud_con {
++	remote-endpoint = <&pmic_glink_hs_in>;
++};

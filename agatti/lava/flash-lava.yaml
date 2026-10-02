@@ -1,0 +1,53 @@
+# LAVA job for `make flash-lava`: flash-loader + flash-kernel on a lab board.
+#
+# The tarball (agatti/output/agatti-flash.qcomflash.tar.gz) is flat and holds
+# the firehose programmer, tz.mbn, fip.elf, efi.bin, and a
+# rawprogram0.xml that writes them to tz_a/tz_b, uefi_a/uefi_b and efi. The
+# partition table and the rest of the eMMC stay as they are, so patch0.xml
+# is empty. The UKI carries the Buildroot rootfs as its initramfs, so the
+# board reaches a login prompt whatever its rootfs partition holds.
+#
+# qcom/lava/submit.sh replaces <ARTIFACT_URL> and <ARTIFACT_TOKEN> with the
+# upload's URL and the name of the LAVA remote artifact token that holds its
+# secret; connect.sh reads device_type, storage and the qdl file lists from
+# here for the interactive session.
+
+device_type: qrb2210-arduino-imola
+job_name: agatti-flash-lava
+priority: medium
+visibility: personal
+timeouts:
+  job:
+    minutes: 30
+  connection:
+    minutes: 5
+actions:
+- deploy:
+    to: qdl
+    qcomflash:
+      url: <ARTIFACT_URL>
+      headers:
+        Authorization: <ARTIFACT_TOKEN>
+    timeout:
+      minutes: 15
+- boot:
+    method: qdl
+    firehose_program: prog_firehose_ddr.elf
+    rawprogram: rawprogram0.xml
+    patch: patch0.xml
+    storage: emmc
+    debug: true
+    ramdump: true
+    ramdump_timeout: 1800
+    timeout:
+      minutes: 10
+- boot:
+    method: minimal
+    auto_login:
+      login_prompt: 'buildroot login:'
+      username: root
+    # A bare '# ' also matches kernel lines such as "PME# supported".
+    prompts:
+    - '\n# '
+    timeout:
+      minutes: 10

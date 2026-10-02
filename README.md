@@ -16,6 +16,7 @@ top-level makefile and subdirectory.
 |----------|-----|-------|----------|
 | Lemans | QCS9100 | Qualcomm IQ-9075 EVK | `lemans.mk` |
 | Monaco | QCS8275 | Arduino VENTUNO Q | `monaco.mk` |
+| Agatti | QRB2210 | Arduino UNO Q | `agatti.mk` |
 
 Files shared by the Qualcomm platforms (SWIV tool, UKI stub, qrtr-ns and
 tqftpserv init scripts) live in `qcom/`.
@@ -47,6 +48,18 @@ make -f monaco.mk tz-qti-sign       # tz.mbn: QTI-signed BL2 (needs QTI remote s
 # monaco/input/ (see monaco/input/README.md)
 make -f monaco.mk flash-loader  # tz_a/tz_b + uefi_a/uefi_b
 make -f monaco.mk flash-kernel  # efi partition only
+```
+
+Arduino UNO Q (Agatti):
+
+```sh
+make -f agatti.mk all           # bl2.elf + fip.elf (boot chain), efi.bin (kernel + rootfs)
+make -f agatti.mk tz-qti-sign   # tz.mbn: QTI-signed BL2 (needs QTI remote signing access)
+
+# Flash with the board in EDL mode; the eMMC firehose programmer goes in
+# agatti/input/ (see agatti/input/README.md)
+make -f agatti.mk flash-loader  # tz_a/tz_b + uefi_a/uefi_b
+make -f agatti.mk flash-kernel  # efi partition only
 ```
 
 ## Firmware blobs (IQ-9075 EVK)

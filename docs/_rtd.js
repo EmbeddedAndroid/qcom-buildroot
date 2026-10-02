@@ -19,6 +19,7 @@
     { id: 'ventuno',   file: 'ventuno-q.html',      title: 'Arduino VENTUNO Q',     subtitle: 'Boot chain · build · sign · flash', group: 'Arduino VENTUNO Q (Monaco)' },
     { id: 'ventuno-qs', file: 'quick-start-ventuno-q.html', title: 'VENTUNO Q Quick Start', subtitle: 'init · sync · build · sign · flash', group: 'Arduino VENTUNO Q (Monaco)' },
     { id: 'ventuno-focused', file: 'ventuno-q-focused.html', title: 'Monaco: Focused', subtitle: 'Platform · Boot · Projects', group: 'Arduino VENTUNO Q (Monaco)' },
+    { id: 'uno-q',     file: 'uno-q.html',          title: 'Arduino UNO Q',         subtitle: 'Boot chain · build · sign · flash', group: 'Arduino UNO Q (Agatti)' },
   ];
 
   function basename(path) {

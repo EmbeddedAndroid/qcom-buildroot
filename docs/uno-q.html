@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arduino UNO Q · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="uno-q">
+<main class="rtd-doc">
+
+  <h1 id="uno-q">Arduino UNO Q</h1>
+  <p>
+    The Arduino UNO Q is built around the Qualcomm QRB2210 (Agatti) SoC. It boots
+    from eMMC.
+  </p>
+  <p><code>agatti.mk</code> builds for it:</p>
+  <ul>
+    <li>the open boot chain: TF-A and OP-TEE with the Agatti support under
+      review, and U-Boot;</li>
+    <li>the Arduino Linux kernel of the UNO Q Yocto image with a Buildroot
+      initramfs, packed in a UKI.</li>
+  </ul>
+
+  <table class="rtd-table">
+    <tr><th>Makefile</th><td><code>agatti.mk</code>, board files in <code>agatti/</code></td></tr>
+    <tr><th>Manifest</th><td><code>agatti.xml</code> in <a href="https://github.com/ldts/qcom-manifest">qcom-manifest</a></td></tr>
+    <tr><th>CPUs</th><td>4 x Cortex-A53 (Kryo 2xx Silver), one cluster</td></tr>
+    <tr><th>Storage</th><td>eMMC, 512-byte blocks; A/B <code>tz</code> and <code>uefi</code> partitions</td></tr>
+    <tr><th>Console</th><td>QUPv3 wrap 0, serial engine 4 (<code>0x4a90000</code>): <code>ttyMSM0</code>, 115200 8N1</td></tr>
+    <tr><th>Stock firmware kept</th><td>PBL, XBL and every partition other than <code>tz_a</code>/<code>tz_b</code>, <code>uefi_a</code>/<code>uefi_b</code> and <code>efi</code></td></tr>
+  </table>
+
+  <h2 id="boot-chain">Boot chain</h2>
+<pre>XBL -&gt; TF-A BL2 (tz) -&gt; BL31 -&gt; OP-TEE -&gt; U-Boot (uefi) -&gt; UKI (efi): Linux at EL2</pre>
+  <ol>
+    <li>XBL loads TF-A BL2 from the <code>tz</code> partition into the IMEM TZ
+      window, and the FIP, wrapped in an ELF, from the <code>uefi</code>
+      partition.</li>
+    <li>BL2 loads BL31, OP-TEE (BL32) and U-Boot (BL33) from the FIP.</li>
+    <li>U-Boot starts the UKI from the ESP through UEFI: <code>bootefi bootmgr</code>
+      finds it as <code>EFI/BOOT/bootaa64.efi</code>.</li>
+  </ol>
+  <table class="rtd-table">
+    <tr><th>Stage</th><th>Address</th><th>Notes</th></tr>
+    <tr><td>TF-A BL2</td><td><code>0x0c100000</code></td><td>IMEM TZ window (100 KiB), where XBL enters the TZ image</td></tr>
+    <tr><td>FIP ELF</td><td><code>0x5f800000</code></td><td>Loaded by XBL from <code>uefi</code></td></tr>
+    <tr><td>TF-A BL31</td><td><code>0x10100000</code></td><td>pIMEM aperture; protects itself and OP-TEE from the normal world with the DDR and pIMEM MPUs</td></tr>
+    <tr><td>OP-TEE</td><td><code>0x45700000</code></td><td><code>PLATFORM=qcom-agatti</code>, in the carve-out the Linux DT reserves for the hypervisor</td></tr>
+    <tr><td>U-Boot</td><td>from the FIP</td><td><code>qcom_defconfig</code>, position independent</td></tr>
+  </table>
+
+  <h3 id="images">Images</h3>
+  <table class="rtd-table">
+    <tr><th>Image</th><th>Partitions</th><th>Contents</th><th>Target</th></tr>
+    <tr><td><code>tz.mbn</code></td><td><code>tz_a</code>, <code>tz_b</code></td><td>TF-A BL2 with a QTI signature (no SWIV segment on Agatti)</td><td><code>make tz-qti-sign</code> (from <code>bl2.elf</code>, made by <code>make bootimage</code>)</td></tr>
+    <tr><td><code>fip.elf</code></td><td><code>uefi_a</code>, <code>uefi_b</code></td><td>FIP (BL31, OP-TEE, U-Boot) in an ELF loaded at <code>0x5f800000</code>, qtestsign signature</td><td><code>make bootimage</code></td></tr>
+    <tr><td><code>efi.bin</code></td><td><code>efi</code></td><td>256 MiB FAT32 ESP with the UKI as <code>EFI/Linux/uki.efi</code> and <code>EFI/BOOT/bootaa64.efi</code>, formatted with 512-byte sectors (the eMMC block size)</td><td><code>make efi</code></td></tr>
+  </table>
+
+  <h2 id="sources">Sources</h2>
+  <table class="rtd-table">
+    <tr><th>Tree</th><th>Pinned revision</th><th>Build</th></tr>
+    <tr><td>TF-A</td><td>The Agatti and UNO Q port under review, with the memory
+        protection of BL31 and OP-TEE (BL31 and BL32 secure-only through the DDR
+        and pIMEM MPUs).</td>
+        <td><code>PLAT=uno_q SPD=opteed</code>, <code>bl2</code> and <code>fip</code></td></tr>
+    <tr><td>OP-TEE</td><td>Agatti platform support under review.</td>
+        <td><code>PLATFORM=qcom-agatti</code>, log level 2 (prints the version)</td></tr>
+    <tr><td>U-Boot</td><td>U-Boot next with the UNO Q configuration fragment,
+        the OP-TEE library enabled by <code>tfa-optee.config</code>, and the fix
+        that sets <code>qcom,select-utmi-as-pipe-clk</code> on the DWC3 glue
+        node (U-Boot's USB gadget works again).</td>
+        <td><code>qcom_defconfig</code> + <code>tfa-optee.config</code> + <code>arduino-uno-q.config</code></td></tr>
+    <tr><td>Linux</td><td>The Arduino kernel of the UNO Q Yocto image
+        (<a href="https://github.com/arduino/linux-qcom">arduino/linux-qcom</a>, the
+        meta-qcom-arduino <code>linux-arduino</code> 7.0 recipe), with the EUD
+        series in <code>agatti/patches/linux/</code>, which the
+        <code>linux-patches</code> target applies once.</td>
+        <td><code>agatti/linux.config</code> (the Yocto image's configuration
+        as a defconfig) with OP-TEE, KVM and MEMTEST built in;
+        <code>qcom/qrb2210-arduino-imola.dtb</code>; the modules in the rootfs</td></tr>
+    <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>)</td>
+        <td>The rootfs, a gzip-compressed cpio used as the initramfs: xtest,
+        stress-ng, kvmtool, the KVM unit tests and a KVM test guest</td></tr>
+  </table>
+  <p>
+    The Yocto configuration builds most drivers as modules.
+    <code>linux-modules</code> installs them in the rootfs, and the
+    <code>S05modules</code> init script loads those listed in
+    <code>/etc/modules</code> (<code>LINUX_MODULES_LOAD</code>, by default the
+    USB PHY drivers <code>phy-qcom-qusb2</code> and
+    <code>phy-qcom-qmp-usbc</code>, which the UNO Q needs). Linux runs at EL2
+    with the board DT.
+  </p>
+
+  <h2 id="build">Build</h2>
+<pre>make toolchains
+make all                         # bl2.elf, fip.elf, efi.bin in agatti/output/
+make tz-qti-sign QTI_SIGN_DIR=... CASS_CAPABILITY=... \
+     QTI_SIGN_SERVER_URL=... QTI_SIGN_SERVER_PORT=...   # tz.mbn</pre>
+  <p>
+    <code>tz-qti-sign</code> signs <code>bl2.elf</code> with Qualcomm
+    <code>sectools</code> through the QTI remote signing service. The Agatti TZ
+    security profile (<code>agatti_tz_security_profile.xml</code> in
+    <code>QTI_SIGN_DIR</code>) comes from the Qualcomm signing package. XBL boots
+    only a QTI-signed TZ image; without one in <code>agatti/output/</code>,
+    <code>flash-loader</code> uses a QTI-signed <code>tz.mbn</code> placed in
+    <code>agatti/input/</code>.
+  </p>
+  <p>
+    Each <code>make</code> invocation stamps <code>BUILD_ID</code> (default
+    <code>agatti-&lt;UTC date-time&gt;</code>) into the TF-A build string, the
+    OP-TEE version, the U-Boot and Linux versions and <code>/etc/issue</code>; the
+    build fails if an image lacks it, and <code>agatti/output/build-info.txt</code>
+    records the identifier of each image.
+  </p>
+  <p>
+    The kernel is built with <code>CONFIG_MEMTEST</code>: <code>memtest=&lt;N&gt;</code>
+    on the command line runs N patterns over all free memory early in the boot
+    (see the <a href="ventuno-q.html#memtest">VENTUNO Q page</a>).
+  </p>
+
+  <h2 id="flash">Flash</h2>
+  <p>
+    qdl writes the images by partition name; the partition table and everything
+    else on the eMMC stay as they are. The firehose programmer comes from the
+    board's stock software image and goes in <code>agatti/input/</code> (or set
+    <code>FIREHOSE</code>); see <code>agatti/input/README.md</code>.
+  </p>
+<pre>make flash-loader    # tz_a, tz_b &lt;- tz.mbn; uefi_a, uefi_b &lt;- fip.elf
+make flash-kernel    # efi &lt;- efi.bin</pre>
+  <p>
+    <code>flash-lava</code> writes the same partitions on a UNO Q in the LAVA lab
+    (device type <code>qrb2210-arduino-imola</code>), as on the
+    <a href="ventuno-q.html#flash-lava">VENTUNO Q</a>, at their place in the UNO Q
+    eMMC layout (qcom-ptool <code>qrb2210-unoq/emmc-16GB-arduino</code>).
+  </p>
+
+  <h2 id="kvm">KVM</h2>
+  <p>
+    Linux runs at EL2. The Cortex-A53 has no VHE, so KVM runs in nVHE mode
+    (<code>/dev/kvm</code>). The rootfs carries kvmtool, the KVM unit tests in
+    <code>/opt/kvm-unit-tests</code> and a small Linux guest in
+    <code>/opt/kvm-guest</code>, as on the <a href="ventuno-q.html#kvm">VENTUNO Q</a>.
+  </p>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>

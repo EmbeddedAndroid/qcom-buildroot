@@ -19,3 +19,8 @@ pi3.cfg
 /monaco/output/*
 !/monaco/output/README.md
 /monaco/blobs/
+# agatti.mk outputs and board inputs (see agatti/*/README.md)
+/agatti/input/*
+!/agatti/input/README.md
+/agatti/output/*
+!/agatti/output/README.md

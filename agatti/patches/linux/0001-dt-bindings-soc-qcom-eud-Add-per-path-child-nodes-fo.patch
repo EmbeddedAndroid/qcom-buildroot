@@ -1,0 +1,107 @@
+From e9af51da4dd0e82794d58e4e6c13902a7ace5352 Mon Sep 17 00:00:00 2001
+From: Elson Serrao <elson.serrao@oss.qualcomm.com>
+Date: Fri, 1 May 2026 10:06:27 -0700
+Subject: [PATCH 01/11] dt-bindings: soc: qcom: eud: Add per-path child nodes
+ for UTMI routing
+
+The Qualcomm Embedded USB Debugger (EUD) can intercept one or two
+independent High-Speed UTMI paths, depending on the SoC configuration.
+Each path is distinct, with its own connector/controller connection
+and role-dependent UTMI routing.
+
+Because the EUD sits between the USB connector and the USB controller,
+it must relay role changes across the UTMI path. In device role, the
+EUD inserts its internal hub into the path to enable debug
+functionality. In host role, the path remains directly connected
+between the PHY and the USB controller, bypassing the EUD hub. These
+hardware constraints require per-path role awareness, as UTMI path
+roles may differ.
+
+The existing binding models only a single UTMI path and assumes a
+uniform routing model. While sufficient for simple device-role-only
+configurations, this representation does not accurately describe EUD
+hardware when role switching and/or multiple UTMI paths are involved.
+
+To address this limitation, per-path child nodes are introduced to
+describe individual UTMI paths through the EUD. Each path includes its
+own ports description, allowing controller and connector associations,
+as well as role-aware routing.
+
+Signed-off-by: Elson Serrao <elson.serrao@oss.qualcomm.com>
+---
+ .../bindings/soc/qcom/qcom,eud.yaml           | 55 ++++++++++++++++++-
+ 1 file changed, 54 insertions(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/soc/qcom/qcom,eud.yaml b/Documentation/devicetree/bindings/soc/qcom/qcom,eud.yaml
+index 84218636c0d8..21f75038a81c 100644
+--- a/Documentation/devicetree/bindings/soc/qcom/qcom,eud.yaml
++++ b/Documentation/devicetree/bindings/soc/qcom/qcom,eud.yaml
+@@ -45,10 +45,63 @@ properties:
+         $ref: /schemas/graph.yaml#/properties/port
+         description: This port is to be attached to the type C connector.
+ 
++  '#address-cells':
++    const: 1
++
++  '#size-cells':
++    const: 0
++
++patternProperties:
++  "^eud-path@[0-1]$":
++    type: object
++    description:
++      Represents one High-Speed UTMI path that EUD intercepts. Use eud-path nodes
++      to associate role-switching behavior with specific port connections, allowing
++      EUD to manage role transitions independently for each UTMI path.
++
++    properties:
++      reg:
++        maxItems: 1
++        description: Path number
++
++      usb-role-switch:
++        type: boolean
++        description:
++          Indicates that EUD should act as a role switch for this path.
++          In device role, debug mode inserts the EUD hub into the UTMI path. In
++          host role, the EUD hub is bypassed and UTMI traffic flows directly
++          between the PHY and the USB controller.
++
++      ports:
++        $ref: /schemas/graph.yaml#/properties/ports
++        description:
++          These ports are to be attached to the endpoint of the USB controller node
++          and USB connector node.
++
++        properties:
++          port@0:
++            $ref: /schemas/graph.yaml#/properties/port
++            description: This port is to be attached to the USB controller.
++
++          port@1:
++            $ref: /schemas/graph.yaml#/properties/port
++            description: This port is to be attached to the USB connector.
++
++    required:
++      - reg
++      - ports
++
++    additionalProperties: false
++
+ required:
+   - compatible
+   - reg
+-  - ports
++
++oneOf:
++  - required:
++      - ports
++  - required:
++      - eud-path@0
+ 
+ additionalProperties: false
+ 
+-- 
+2.55.0
+
+

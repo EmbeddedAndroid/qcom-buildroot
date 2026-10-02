@@ -1,0 +1,153 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+Date: Fri, 3 Jul 2026 14:44:16 +0200
+Subject: [PATCH 10/11] arm64: dts: qcom: agatti: Wire up EUD
+
+Enable the Embedded USB Debugger block, allowing for closed-case
+debugging on appropriately fused devices.
+
+Trivially wire it up on the two Agatti-based boards in a single step to
+avoid a separate commit dancing around the common DWC3<->link
+assignment.
+
+Signed-off-by: Konrad Dybcio <konrad.dybcio@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/agatti.dtsi          | 38 +++++++++++++++++++
+ .../dts/qcom/qrb2210-arduino-imola-base.dts   | 10 ++---
+ arch/arm64/boot/dts/qcom/qrb2210-rb1.dts      | 12 +++---
+ 3 files changed, 50 insertions(+), 10 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/agatti.dtsi b/arch/arm64/boot/dts/qcom/agatti.dtsi
+index ebeb2ff6b..75cbfabf1 100644
+--- a/arch/arm64/boot/dts/qcom/agatti.dtsi
++++ b/arch/arm64/boot/dts/qcom/agatti.dtsi
+@@ -723,6 +723,43 @@ data-pins {
+ 			};
+ 		};
+ 
++		eud: eud@1610000 {
++			compatible = "qcom,sc7280-eud", "qcom,eud";
++			reg = <0x0 0x01610000 0x0 0x2000>,
++			      <0x0 0x01612000 0x0 0x1000>;
++			interrupts = <GIC_SPI 189 IRQ_TYPE_LEVEL_HIGH>;
++
++			qcom,tcsr-check = <&tcsr_regs 0x25018 0>;
++
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			eud0: eud-path@0 {
++				reg = <0>;
++				usb-role-switch;
++
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++
++					port@0 {
++						reg = <0>;
++
++						eud_usb: endpoint {
++							remote-endpoint = <&usb_dwc3_hs>;
++						};
++					};
++
++					port@1 {
++						reg = <1>;
++
++						eud_con: endpoint {
++						};
++					};
++				};
++			};
++		};
++
+ 		lpass_tlmm: pinctrl@a7c0000 {
+ 			compatible = "qcom,qcm2290-lpass-lpi-pinctrl",
+ 				     "qcom,sm6115-lpass-lpi-pinctrl";
+@@ -1663,6 +1700,7 @@ port@0 {
+ 						reg = <0>;
+ 
+ 						usb_dwc3_hs: endpoint {
++							remote-endpoint = <&eud_usb>;
+ 						};
+ 					};
+ 
+diff --git a/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts b/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
+index 590d8a695..34d62c832 100644
+--- a/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
++++ b/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
+@@ -231,6 +231,10 @@ vph_pwr: regulator-vph-pwr {
+ 	};
+ };
+ 
++&eud_con {
++	remote-endpoint = <&anx_hs_in>;
++};
++
+ &gpi_dma0 {
+ 	status = "okay";
+ };
+@@ -286,7 +290,7 @@ ports {
+ 				port@0 {
+ 					reg = <0>;
+ 					anx_hs_in: endpoint {
+-						remote-endpoint = <&usb_dwc3_hs>;
++						remote-endpoint = <&eud_con>;
+ 					};
+ 				};
+ 
+@@ -652,10 +656,6 @@ &usb {
+ 	status = "okay";
+ };
+ 
+-&usb_dwc3_hs {
+-	remote-endpoint = <&anx_hs_in>;
+-};
+-
+ &usb_hsphy {
+ 	vdd-supply = <&pm4125_l12>;
+ 	vdda-pll-supply = <&pm4125_l13>;
+diff --git a/arch/arm64/boot/dts/qcom/qrb2210-rb1.dts b/arch/arm64/boot/dts/qcom/qrb2210-rb1.dts
+index 9814ac489..a88e536d1 100644
+--- a/arch/arm64/boot/dts/qcom/qrb2210-rb1.dts
++++ b/arch/arm64/boot/dts/qcom/qrb2210-rb1.dts
+@@ -255,6 +255,10 @@ &cpu_pd3 {
+ 
+ /delete-node/ &cluster_pd;
+ 
++&eud_con {
++	remote-endpoint = <&pm4125_hs_in>;
++};
++
+ &gpi_dma0 {
+ 	status = "okay";
+ };
+@@ -424,13 +428,15 @@ ports {
+ 
+ 			port@0 {
+ 				reg = <0>;
++
+ 				pm4125_hs_in: endpoint {
+-					remote-endpoint = <&usb_dwc3_hs>;
++					remote-endpoint = <&eud_con>;
+ 				};
+ 			};
+ 
+ 			port@1 {
+ 				reg = <1>;
++
+ 				pm4125_ss_in: endpoint {
+ 					remote-endpoint = <&usb_qmpphy_out>;
+ 				};
+@@ -808,10 +814,6 @@ &usb {
+ 	status = "okay";
+ };
+ 
+-&usb_dwc3_hs {
+-	remote-endpoint = <&pm4125_hs_in>;
+-};
+-
+ &usb_hsphy {
+ 	vdd-supply = <&pm4125_l12>;
+ 	vdda-pll-supply = <&pm4125_l13>;
