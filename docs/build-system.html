@@ -122,6 +122,38 @@ repo sync -j4 --no-clone-bundle</pre>
     <li>The console is the Qualcomm GENI UART, <code>ttyMSM0</code> at 115200 8N1.</li>
   </ul>
 
+  <h2 id="video-test">Video codec test</h2>
+  <p>
+    <code>qcom/video/video.mk</code> puts what the <code>video-codec</code>
+    test definition (test-definitions
+    <code>automated/linux/video-codec</code>) needs in the rootfs; a board
+    makefile enables it with one line after <code>common.mk</code> and its
+    <code>BR2_ROOTFS_OVERLAY</code> assignment:
+  </p>
+<pre>include qcom/video/video.mk</pre>
+  <ul>
+    <li>FFmpeg (Buildroot) with only what the test runs: the H.264, HEVC and
+      VP9 V4L2 mem2mem decoders, the H.264 and HEVC mem2mem encoders, the
+      software decoders that check an encode, <code>testsrc2</code>, the
+      <code>psnr</code> filter and <code>framemd5</code>. Its configure step
+      fails if the V4L2 mem2mem support cannot be built.</li>
+    <li>In <code>/usr/share/video-codec</code>: an H.264 high and an HEVC main
+      stream at 1280x720 and a VP9 stream at 640x480, 60 frames each, with
+      <code>&lt;stream&gt;.md5</code> holding the MD5 of every frame of their
+      software decode to NV12, and a README with the tools and stream hashes.
+      The test decodes each stream on the codec and compares every frame.</li>
+  </ul>
+  <p>
+    The <code>video-streams</code> target makes the streams on the build host
+    with <code>qcom/video/mk-video-streams.sh</code>, which needs an
+    <code>ffmpeg</code> with libx264, libx265 and libvpx (on Debian and Ubuntu,
+    the <code>ffmpeg</code> package). The encoders run on one thread, so the
+    same encoder versions give the same streams. The board itself brings the
+    codec driver, its firmware and the board facts for the test (platform
+    device, driver, firmware file, codecs). <code>QCOM_VIDEO_TEST=n</code>
+    leaves FFmpeg and the streams out.
+  </p>
+
   <h2 id="board-files">Adding a board</h2>
   <ol>
     <li>A manifest <code>&lt;platform&gt;.xml</code> in qcom-manifest that links
