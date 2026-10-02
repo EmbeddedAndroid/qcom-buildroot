@@ -17,6 +17,9 @@
 #   efi.bin     FAT32 ESP holding the UKI (kernel, DTB and the Buildroot
 #               initramfs), flashed to efi
 #
+# The initramfs carries the ADSP and CDSP firmware from linux-firmware, which
+# Linux starts through the OP-TEE PAS service (dsp-firmware).
+#
 # XBL authenticates the TZ image with the QTI authenticator even when secure
 # boot is disabled, so a qtestsign signature is not accepted for tz.mbn.
 # tz-qti-sign signs bl2.elf through the QTI remote signing service (CASS);
@@ -44,8 +47,8 @@
 #   clean          clean all components and kodiak/output/
 #
 # Component targets: optee-os, u-boot, tfa, fip, linux, linux-defconfig,
-# buildroot, qtestsign-fetch, qtiseclib-fetch, and the matching *-clean
-# targets.
+# buildroot, dsp-firmware, qtestsign-fetch, qtiseclib-fetch, and the matching
+# *-clean targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
@@ -53,6 +56,9 @@
 #   TF_A_FLAGS        TF-A make flags (default: PLAT=rb3gen2 SPD=opteed)
 #   TF_A_DEBUG        1 for a TF-A debug build (default: 0)
 #   QTISECLIB         libqtisec.a (default: kodiak/blobs/libqtisec.a, fetched)
+#   DSP_FW_REPO, DSP_FW_REV
+#                     linux-firmware repository and revision of the DSP
+#                     firmware (see the dsp-firmware section)
 #   U_BOOT_CONFIGS    U-Boot defconfig and config fragments
 #   U_BOOT_DEVICE_TREE
 #                     U-Boot device tree (default: qcom/qcs6490-rb3gen2)
@@ -128,6 +134,8 @@ BR2_PACKAGE_KVMTOOL             = y
 BR2_PACKAGE_KVM_UNIT_TESTS_EXT  = y
 BR2_PACKAGE_KVM_GUEST_EXT       = y
 BR2_PACKAGE_SOCAT               = y
+# The DSP firmware (dsp-firmware).
+BR2_ROOTFS_OVERLAY              = $(DSP_OVERLAY)
 
 ################################################################################
 # Paths to repositories: the path= attributes in manifest.git/kodiak.xml.
@@ -197,11 +205,12 @@ help:
 	@echo "  clean          clean all components and kodiak/output/"
 	@echo ""
 	@echo "Component targets: optee-os u-boot tfa fip linux linux-defconfig"
-	@echo "  buildroot qtestsign-fetch qtiseclib-fetch, and the matching *-clean targets"
+	@echo "  buildroot dsp-firmware qtestsign-fetch qtiseclib-fetch, and the matching"
+	@echo "  *-clean targets"
 	@echo ""
-	@echo "Variables: BUILD_ID TF_A_FLAGS TF_A_DEBUG QTISECLIB U_BOOT_CONFIGS"
-	@echo "  U_BOOT_DEVICE_TREE LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS"
-	@echo "  FLASH_LAVA_CONNECT FLASH_LAVA_JOB;"
+	@echo "Variables: BUILD_ID TF_A_FLAGS TF_A_DEBUG QTISECLIB DSP_FW_REPO DSP_FW_REV"
+	@echo "  U_BOOT_CONFIGS U_BOOT_DEVICE_TREE LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE"
+	@echo "  QDL QDL_FLAGS FLASH_LAVA_CONNECT FLASH_LAVA_JOB;"
 	@echo "  tz-qti-sign: SECTOOLS QTI_SIGN_DIR SECURITY_PROFILE CASS_CAPABILITY"
 	@echo "  QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT"
 
@@ -381,10 +390,16 @@ tz-qti-sign:
 # when there is no .config. The kernel has no modules, so everything the
 # board needs is built in.
 #
+# LINUX_DSP_CONFIGS: PAS remoteprocs with the OP-TEE backend, GLINK over SMEM
+# and QRTR for the ADSP and the CDSP.
 # LINUX_TEST_CONFIGS: MEMTEST, the early memory test that memtest=<N> on the
-# kernel command line runs (N patterns over all free memory). linux fails if
-# it is not built in.
+# kernel command line runs (N patterns over all free memory).
+# linux fails if any of them is not built in.
 ################################################################################
+LINUX_DSP_CONFIGS = \
+	REMOTEPROC QCOM_Q6V5_PAS QCOM_SYSMON QCOM_PAS QCOM_PAS_TEE QCOM_SCM \
+	RPMSG RPMSG_QCOM_GLINK RPMSG_QCOM_GLINK_SMEM QCOM_SMEM QCOM_SMP2P \
+	QCOM_IPCC QCOM_AOSS_QMP QCOM_RPMHPD QRTR QRTR_SMD QCOM_PD_MAPPER
 LINUX_TEST_CONFIGS = MEMTEST
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
@@ -411,14 +426,14 @@ linux-defconfig:
 		-e KVM \
 		-d LOCALVERSION_AUTO \
 		-d MODULES \
-		$(addprefix -e ,$(LINUX_TEST_CONFIGS))
+		$(addprefix -e ,$(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
 linux: | $(KODIAK_OUT)
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) linux-defconfig; \
 	fi
-	@for c in $(LINUX_TEST_CONFIGS); do \
+	@for c in $(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS); do \
 		grep -qx "CONFIG_$$c=y" $(LINUX_PATH)/.config || \
 		{ echo "ERROR: CONFIG_$$c is not built in: run 'make linux-defconfig'"; exit 1; }; \
 	done
@@ -431,6 +446,56 @@ linux: | $(KODIAK_OUT)
 linux-clean:
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) clean
 	rm -f $(LINUX_DTB)
+
+################################################################################
+# DSP firmware, fetched at a pinned linux-firmware revision into
+# kodiak/blobs/dsp/ and staged into DSP_OVERLAY, a rootfs overlay:
+#   /lib/firmware/qcom/qcs6490/  the ADSP and CDSP images the remoteproc
+#                                firmware-name properties of the RB3 Gen 2 DT
+#                                name, and their protection-domain lists
+#   /lib/firmware/               LICENSE.qcom and qcom/NOTICE.txt, the terms
+#                                they are distributed under
+# linux-firmware ships the files in qcom/qcm6490/ and its WHENCE links them
+# into qcom/qcs6490/; DSP_FW_REV has ADSP.HT.5.5.c8-00246-KODIAK-1 and
+# CDSP.HT.2.5.c3-00130-KODIAK-1. kodiak/dsp-firmware.sha256 holds the SHA-256
+# of every staged file, checked after staging.
+################################################################################
+# GitLab serves partial clones; git.kernel.org sends the whole tree.
+DSP_FW_REPO  ?= https://gitlab.com/kernel-firmware/linux-firmware.git
+DSP_FW_REV   ?= 664f8b6adeba20be0960d9cb1b2ad8c5a4d7e0e3
+DSP_FW_SRC    = qcom/qcm6490
+DSP_FW_DIR    = qcom/qcs6490
+DSP_FW_FILES  = adsp.mbn adspr.jsn adsps.jsn adspua.jsn battmgr.jsn cdsp.mbn cdspr.jsn
+DSP_FW_SHA256 = $(CURDIR)/kodiak/dsp-firmware.sha256
+DSP_OUT       = $(KODIAK_BLOBS)/dsp
+DSP_OVERLAY   = $(DSP_OUT)/overlay
+DSP_FW_GIT    = git -C $(DSP_OUT)/linux-firmware
+
+.PHONY: dsp-firmware dsp-firmware-clean
+
+buildroot: dsp-firmware
+
+dsp-firmware:
+	mkdir -p $(DSP_OUT)
+	[ "$$($(DSP_FW_GIT) rev-parse -q --verify HEAD 2>/dev/null)" = $(DSP_FW_REV) ] || { \
+		rm -rf $(DSP_OUT)/linux-firmware && \
+		git init -q $(DSP_OUT)/linux-firmware && \
+		$(DSP_FW_GIT) fetch -q --depth=1 --filter=blob:none $(DSP_FW_REPO) $(DSP_FW_REV) && \
+		$(DSP_FW_GIT) sparse-checkout set --no-cone /LICENSE.qcom /qcom/NOTICE.txt \
+			$(addprefix /$(DSP_FW_SRC)/,$(DSP_FW_FILES)) && \
+		$(DSP_FW_GIT) checkout -q FETCH_HEAD; }
+	rm -rf $(DSP_OVERLAY)
+	mkdir -p $(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR)
+	cp $(DSP_OUT)/linux-firmware/LICENSE.qcom $(DSP_OVERLAY)/lib/firmware/
+	cp $(DSP_OUT)/linux-firmware/qcom/NOTICE.txt $(DSP_OVERLAY)/lib/firmware/qcom/
+	cd $(DSP_OUT)/linux-firmware/$(DSP_FW_SRC) && \
+		cp $(DSP_FW_FILES) $(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR)/
+	cd $(DSP_OVERLAY) && sha256sum --quiet -c $(DSP_FW_SHA256)
+	@[ $$(cd $(DSP_OVERLAY) && find . -type f | wc -l) -eq $$(wc -l < $(DSP_FW_SHA256)) ] || \
+		{ echo "ERROR: $(DSP_OVERLAY) and $(DSP_FW_SHA256) list different files"; exit 1; }
+
+dsp-firmware-clean:
+	rm -rf $(DSP_OUT)
 
 ################################################################################
 # UKI and ESP (efi.bin)

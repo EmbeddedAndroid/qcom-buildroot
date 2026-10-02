@@ -21,7 +21,8 @@
   <ul>
     <li>the open boot chain from upstream TF-A and OP-TEE, which support Kodiak
       and the RB3 Gen 2, and U-Boot;</li>
-    <li>a Linux kernel with a Buildroot initramfs, packed in a UKI.</li>
+    <li>a Linux kernel with a Buildroot initramfs, packed in a UKI;</li>
+    <li>the ADSP and CDSP firmware from linux-firmware, in the initramfs.</li>
   </ul>
 
   <table class="rtd-table">
@@ -70,6 +71,28 @@
     checks its SHA-256; <code>QTISECLIB=&lt;path&gt;</code> uses another copy.
   </p>
 
+  <h2 id="dsp">DSPs</h2>
+  <p>
+    The rootfs carries the ADSP and CDSP firmware from linux-firmware, under the
+    names the RB3 Gen 2 device tree requests:
+  </p>
+  <table class="rtd-table">
+    <tr><th>Remote processor</th><th>Firmware</th><th>Version</th></tr>
+    <tr><td>ADSP</td><td><code>qcom/qcs6490/adsp.mbn</code></td><td><code>ADSP.HT.5.5.c8-00246-KODIAK-1</code></td></tr>
+    <tr><td>CDSP</td><td><code>qcom/qcs6490/cdsp.mbn</code></td><td><code>CDSP.HT.2.5.c3-00130-KODIAK-1</code></td></tr>
+  </table>
+  <p>
+    with their protection-domain lists (<code>*.jsn</code>) and the terms they
+    are distributed under, <code>LICENSE.qcom</code> and
+    <code>qcom/NOTICE.txt</code> in <code>/lib/firmware</code>.
+    <code>dsp-firmware</code> (a prerequisite of <code>buildroot</code>) fetches
+    them from linux-firmware at a pinned revision (<code>DSP_FW_REV</code>) into
+    <code>kodiak/blobs/dsp/</code> and checks every staged file against
+    <code>kodiak/dsp-firmware.sha256</code>. Linux starts both DSPs at boot
+    through the OP-TEE PAS pseudo-TA. The rootfs has no FastRPC or audio
+    userspace.
+  </p>
+
   <h2 id="sources">Sources</h2>
   <table class="rtd-table">
     <tr><th>Tree</th><th>Pinned revision</th><th>Build</th></tr>
@@ -86,12 +109,13 @@
         support (<code>tech/security/optee</code> in
         <a href="https://github.com/qualcomm-linux/kernel-topics">kernel-topics</a>,
         as for the IQ-9075 EVK), which carries the Kodiak EL2 overlay.</td>
-        <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST and no
-        modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
+        <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST, the PAS
+        remote processors with the OP-TEE backend, and no modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
         Kodiak EL2 overlay)</td></tr>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>)</td>
         <td>The rootfs, a gzip-compressed cpio used as the initramfs: xtest,
-        stress-ng, kvmtool, the KVM unit tests and a KVM test guest</td></tr>
+        stress-ng, kvmtool, the KVM unit tests, a KVM test guest and the DSP
+        firmware</td></tr>
   </table>
 
   <h2 id="build">Build</h2>
