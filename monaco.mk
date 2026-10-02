@@ -162,6 +162,11 @@ BR2_PACKAGE_MESA3D_OPENGL_ES                = y
 BR2_PACKAGE_MESA3D_GBM                      = y
 BR2_PACKAGE_LIBDRM                          = y
 BR2_PACKAGE_EGL_READBACK_EXT                = y
+# KVM: kvmtool and the KVM unit tests built for it, with their runner (bash)
+# in /opt/kvm-unit-tests.
+BR2_PACKAGE_BUSYBOX_SHOW_OTHERS = y
+BR2_PACKAGE_KVMTOOL             = y
+BR2_PACKAGE_KVM_UNIT_TESTS_EXT  = y
 BR2_ROOTFS_OVERLAY              = $(CURDIR)/qcom/overlay $(CURDIR)/monaco/overlay $(DSP_OVERLAY)
 
 ################################################################################

@@ -296,6 +296,34 @@ aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
     boot; without it the first draw hangs the GPU.
   </p>
 
+  <h2 id="kvm">KVM</h2>
+  <p>
+    Linux runs at EL2, so KVM is available in VHE mode (<code>/dev/kvm</code>).
+    The rootfs carries kvmtool (<code>lkvm</code>) and, in
+    <code>/opt/kvm-unit-tests</code>, the
+    <a href="https://gitlab.com/kvm-unit-tests/kvm-unit-tests">KVM unit tests</a>
+    built for kvmtool with their runner: small guests that each check one part
+    of KVM and its virtual hardware (exception vectors, SMP, GIC and ITS, timers,
+    PSCI, PMU, debug, FPU context, micro benchmarks).
+  </p>
+<pre>cd /opt/kvm-unit-tests
+export MAX_SMP=$(nproc) TIMEOUT=0
+./run_tests.sh -v                       # the default tests
+./run_tests.sh -a timer psci micro-bench  # some tests; -a includes the manual ones</pre>
+  <p>
+    BusyBox has no <code>getconf</code>, from which the runner takes the number of
+    vCPUs for the SMP tests (<code>MAX_SMP</code>), nor a <code>timeout</code> with the
+    <code>--foreground</code> option the run scripts use: <code>TIMEOUT=0</code> runs
+    the tests without a time limit.
+  </p>
+  <p>
+    The GIC has no GICv2 compatibility, so KVM offers the guests a GICv3 only and
+    the <code>gicv2-*</code> tests do not apply. The Cortex-A55 and Cortex-A78C
+    clusters have separate PMUs and kvmtool gives a VM the PMU of the CPU it
+    starts on: run the <code>pmu-*</code> tests with the VM held on one cluster,
+    in a cgroup v2 cpuset.
+  </p>
+
 </main>
 <script src="_rtd.js"></script>
 </body>
