@@ -56,7 +56,7 @@
 #
 # Component targets: optee-os, u-boot, u-boot-spl, tfa, fip, uefi, linux,
 # linux-patches, linux-defconfig, buildroot, buildroot-patches, dsp-firmware,
-# qtestsign-fetch, and the matching *-clean targets.
+# qtestsign-fetch, video-streams, and the matching *-clean targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
@@ -77,6 +77,8 @@
 #                     on a terminal, else flash-only)
 #   FLASH_LAVA_JOB, FLASH_LAVA_YOCTO_JOB
 #                     the LAVA job definitions (default: monaco/lava/*.yaml)
+#   QCOM_VIDEO_TEST   y to put FFmpeg and the video-codec test streams in
+#                     the rootfs (default: y; see qcom/video/video.mk)
 #   tz-qti-sign:      SECTOOLS, QTI_SIGN_DIR, SECURITY_PROFILE,
 #                     CASS_CAPABILITY, QTI_SIGN_SERVER_URL,
 #                     QTI_SIGN_SERVER_PORT (see the tz-qti-sign section)
@@ -181,6 +183,7 @@ TF_A_PATH ?= $(ROOT)/arm-trusted-firmware
 
 include common.mk
 include toolchain.mk
+include qcom/video/video.mk
 
 # common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
 # which turns the Monaco target.mk's '+= qcom_pas/...' into a no-op. Append
@@ -252,11 +255,11 @@ help:
 	@echo ""
 	@echo "Component targets: optee-os u-boot u-boot-spl tfa fip uefi linux"
 	@echo "  linux-patches linux-defconfig buildroot buildroot-patches dsp-firmware"
-	@echo "  qtestsign-fetch, and the matching *-clean targets"
+	@echo "  qtestsign-fetch video-streams, and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TZ_IMAGE TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS"
 	@echo "  U_BOOT_SPL_CONFIG LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS"
-	@echo "  FLASH_LAVA_CONNECT FLASH_LAVA_JOB FLASH_LAVA_YOCTO_JOB;"
+	@echo "  FLASH_LAVA_CONNECT FLASH_LAVA_JOB FLASH_LAVA_YOCTO_JOB QCOM_VIDEO_TEST;"
 	@echo "  tz-qti-sign: SECTOOLS QTI_SIGN_DIR SECURITY_PROFILE CASS_CAPABILITY"
 	@echo "  QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT; yocto: KAS META_QCOM_ARDUINO_REV"
 

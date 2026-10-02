@@ -320,6 +320,21 @@ aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
     it with (the <code>video-firmware</code> node of the EL2 overlay). The core
     powers down when idle and OP-TEE starts it again on the next use.
   </p>
+  <p>
+    The rootfs also carries FFmpeg and the reference streams of the
+    <code>video-codec</code> test (see
+    <a href="build-system.html#video-test">Video codec test</a>). Decode a
+    stream on iris and compare every frame with its software decode:
+  </p>
+<pre>s=/usr/share/video-codec/h264-720p.h264
+ffmpeg -c:v h264_v4l2m2m -i $s -fps_mode passthrough -pix_fmt nv12 -f framemd5 - |
+    grep -v '^#' | awk -F, '{ gsub(/ /, "", $6); print $6 }' | cmp - $s.md5</pre>
+  <p>
+    The test's board facts for the VENTUNO Q: device
+    <code>aa00000.video-codec</code>, driver <code>qcom-iris</code>, firmware
+    <code>/lib/firmware/qcom/vpu/vpu30_p4_s6.mbn</code>, decoders
+    <code>h264 hevc vp9</code>, encoders <code>h264 hevc</code>.
+  </p>
 
   <h2 id="kvm">KVM</h2>
   <p>
