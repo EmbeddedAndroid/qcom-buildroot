@@ -508,6 +508,8 @@ tz-qti-sign:
 # SMEM, QRTR and FastRPC for the ADSP, CDSP and GPDSP.
 # LINUX_TEST_CONFIGS: MEMTEST, the early memory test that memtest=<N> on the
 # kernel command line runs (N patterns over all free memory).
+# LINUX_VIDEO_CONFIGS: the iris video codec driver (V4L2 mem2mem decoder and
+# encoder).
 # linux fails if any of them is not built in.
 ################################################################################
 LINUX_DSP_CONFIGS = \
@@ -517,6 +519,7 @@ LINUX_DSP_CONFIGS = \
 	QRTR QRTR_SMD QCOM_PD_MAPPER QCOM_FASTRPC \
 	CMA DMA_CMA DMABUF_HEAPS DMABUF_HEAPS_SYSTEM DMABUF_HEAPS_CMA
 LINUX_TEST_CONFIGS = MEMTEST
+LINUX_VIDEO_CONFIGS = MEDIA_SUPPORT VIDEO_DEV VIDEO_QCOM_IRIS
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
 LINUX_PATCHES    = $(sort $(wildcard $(CURDIR)/monaco/patches/linux/*.patch))
@@ -556,7 +559,7 @@ linux-defconfig: linux-patches
 		-e KVM \
 		-d LOCALVERSION_AUTO \
 		-d MODULES \
-		$(addprefix -e ,$(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS))
+		$(addprefix -e ,$(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS) $(LINUX_VIDEO_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
 # The base DTB is built with symbols (-@) so the EL2 overlay can be applied.
@@ -564,7 +567,7 @@ linux: linux-patches | $(MONACO_OUT)
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) linux-defconfig; \
 	fi
-	@for c in $(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS); do \
+	@for c in $(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS) $(LINUX_VIDEO_CONFIGS); do \
 		grep -qx "CONFIG_$$c=y" $(LINUX_PATH)/.config || \
 		{ echo "ERROR: CONFIG_$$c is not built in: run 'make linux-defconfig'"; exit 1; }; \
 	done
@@ -627,13 +630,16 @@ buildroot-patches:
 # for the engines nothing earlier in the boot has set up, and the Adreno 623
 # GPU firmware the msm driver loads from /lib/firmware/qcom (GPU_FW_FILES:
 # the GMU firmware and the SQE microcode, under LICENSE.qcom). The EL2 overlay
-# disables the zap shader, so its firmware is not installed.
+# disables the zap shader, so its firmware is not installed. VIDEO_FW_FILES is
+# the iris firmware (LICENSE.qcom), which iris loads on the first open of a
+# video node.
 ################################################################################
 # GitLab serves partial clones; git.kernel.org sends the whole tree.
 DSP_FW_REPO   ?= https://gitlab.com/kernel-firmware/linux-firmware.git
 DSP_FW_REV    ?= 664f8b6adeba20be0960d9cb1b2ad8c5a4d7e0e3
 DSP_FW_FILES   = adsp.mbn adspr.jsn adspua.jsn cdsp0.mbn cdspr.jsn gpdsp0.mbn qupv3fw.elf
 GPU_FW_FILES   = qcom/a623_gmu.bin qcom/a650_sqe.fw
+VIDEO_FW_FILES = qcom/vpu/vpu30_p4_s6.mbn
 # The AudioReach topology the sound card requests (qcom/qcs8300/<model>-tplg.bin)
 # is newer than DSP_FW_REV, so it comes from its own pinned revision.
 DSP_TPLG_REV  ?= e8a8bc636565a2874b2123684b8ef23f30687c27
@@ -673,12 +679,13 @@ dsp-firmware:
 			$(foreach d,adsp cdsp gdsp0,$(DSP_BIN_SRC)/$(d)-$(DSP_BIN_BUILD)) && \
 		$(DSP_BIN_GIT) checkout -q; }
 	rm -rf $(DSP_OVERLAY)
-	mkdir -p $(DSP_OVERLAY)/lib/firmware/qcom/qcs8300 $(DSP_OVERLAY)/usr/share/qcom/conf.d
+	mkdir -p $(DSP_OVERLAY)/lib/firmware/qcom/qcs8300 $(DSP_OVERLAY)/lib/firmware/qcom/vpu \
+		$(DSP_OVERLAY)/usr/share/qcom/conf.d
 	cp $(DSP_OUT)/linux-firmware/LICENSE.qcom-2 $(DSP_OVERLAY)/lib/firmware/
 	cp $(DSP_OUT)/linux-firmware/qcom/NOTICE.txt $(DSP_OVERLAY)/lib/firmware/qcom/
 	cd $(DSP_OUT)/linux-firmware/qcom/qcs8300 && \
 		cp -L $(DSP_FW_FILES) $(DSP_OVERLAY)/lib/firmware/qcom/qcs8300/
-	for f in LICENSE.qcom $(GPU_FW_FILES); do \
+	for f in LICENSE.qcom $(GPU_FW_FILES) $(VIDEO_FW_FILES); do \
 		$(DSP_FW_GIT) show $(DSP_FW_REV):$$f > $(DSP_OVERLAY)/lib/firmware/$$f || exit 1; \
 	done
 	$(DSP_FW_GIT) cat-file -e $(DSP_TPLG_REV) 2>/dev/null || \

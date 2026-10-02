@@ -306,6 +306,21 @@ aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
     boot; without it the first draw hangs the GPU.
   </p>
 
+  <h2 id="video">Video codec</h2>
+  <p>
+    iris, the Monaco video codec, registers a V4L2 mem2mem decoder (H.264,
+    HEVC, VP9, AV1) and encoder (H.264, HEVC). Its firmware,
+    <code>qcom/vpu/vpu30_p4_s6.mbn</code> from linux-firmware, is in the
+    rootfs; iris loads it on the first open of a video node, and OP-TEE
+    authenticates and starts it through the PAS pseudo-TA. The OP-TEE iris
+    support is in
+    <a href="https://github.com/OP-TEE/optee_os/pull/8073">optee_os pull request 8073</a>,
+    which the OP-TEE revision in <code>monaco.xml</code> predates. With no
+    hypervisor, Linux maps the firmware for the stream the video core fetches
+    it with (the <code>video-firmware</code> node of the EL2 overlay). The core
+    powers down when idle and OP-TEE starts it again on the next use.
+  </p>
+
   <h2 id="kvm">KVM</h2>
   <p>
     Linux runs at EL2, so KVM is available in VHE mode (<code>/dev/kvm</code>).
