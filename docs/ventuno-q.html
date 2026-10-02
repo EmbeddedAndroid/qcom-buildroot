@@ -226,6 +226,31 @@ make flash-kernel    # efi &lt;- efi.bin</pre>
     write uefi_a fip.elf write uefi_b fip.elf
 qdl --storage emmc prog_firehose_ddr.elf write efi efi.bin</pre>
 
+  <h3 id="flash-lava">On a LAVA lab board</h3>
+  <p>
+    <code>flash-lava</code> writes what <code>flash-loader</code> and
+    <code>flash-kernel</code> write, and <code>flash-lava-yocto</code> what
+    <code>flash-yocto</code> writes, to a VENTUNO Q in the LAVA lab
+    (lava.infra.foundries.io, device type <code>monaco-arduino-monza</code>)
+    instead of one on USB. They package a qcomflash tarball, upload it and ask
+    how to flash:
+  </p>
+  <ul>
+    <li>interactive (the default): reserve a board, flash it once and open its
+      serial console; Ctrl+D closes the console and releases the board;</li>
+    <li>flash-only: a one-shot LAVA job that flashes the board and boots it to a
+      login prompt.</li>
+  </ul>
+<pre>make flash-lava                            # asks
+make flash-lava-yocto FLASH_LAVA_CONNECT=0  # 1: interactive, 0: flash-only</pre>
+  <p>
+    LAVA runs qdl with rawprogram files, so <code>flash-lava</code> writes the five
+    partitions at their place in the eMMC layout <code>flash-yocto</code> writes;
+    a board with another layout needs <code>flash-lava-yocto</code> first. The
+    interactive mode needs a board that allows the LAVA serial-console proxy. The
+    LAVA token and the other requirements are in <code>qcom/lava/README.md</code>.
+  </p>
+
   <h2 id="dsp">DSPs and audio</h2>
   <p>The rootfs carries:</p>
   <ul>

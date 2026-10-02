@@ -1,0 +1,54 @@
+# LAVA job for `make flash-lava-yocto`: flash-yocto on a lab board.
+#
+# The tarball (monaco/output/monaco-yocto.qcomflash.tar.gz) is the Yocto
+# qcomflash directory from `make yocto`, flat: the complete eMMC image (boot
+# firmware, CDT, partition table, efi and rootfs), written as flash-yocto
+# writes it. A Yocto qcomflash tarball of its own nests everything under
+# core-image-base-ventuno-q/: for one, add `path: core-image-base-ventuno-q`
+# to the qdl boot action.
+#
+# qcom/lava/submit.sh replaces <ARTIFACT_URL> and <ARTIFACT_TOKEN> with the
+# upload's URL and the name of the LAVA remote artifact token that holds its
+# secret; connect.sh reads device_type, storage and the qdl file lists from
+# here for the interactive session.
+
+device_type: monaco-arduino-monza
+job_name: monaco-flash-lava-yocto
+priority: medium
+visibility: personal
+timeouts:
+  job:
+    minutes: 45
+  connection:
+    minutes: 5
+actions:
+- deploy:
+    to: qdl
+    rootfs_image: rootfs.img
+    qcomflash:
+      url: <ARTIFACT_URL>
+      headers:
+        Authorization: <ARTIFACT_TOKEN>
+    timeout:
+      minutes: 30
+- boot:
+    method: qdl
+    firehose_program: prog_firehose_ddr.elf
+    rawprogram: rawprogram0.xml rawprogram1.xml
+    patch: patch0.xml patch1.xml
+    storage: emmc
+    debug: true
+    ramdump: true
+    ramdump_timeout: 1800
+    timeout:
+      minutes: 15
+- boot:
+    method: minimal
+    auto_login:
+      login_prompt: 'login:'
+      username: root
+    prompts:
+    - 'root@ventuno-q'
+    - 'root@(.*):[/~]#'
+    timeout:
+      minutes: 15

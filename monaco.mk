@@ -47,6 +47,9 @@
 #   flash-kernel   write efi.bin to efi
 #   yocto          the Yocto BSP image (meta-qcom-arduino, ventuno-q)
 #   flash-yocto    write the complete Yocto image to the eMMC
+#   flash-lava     flash-loader and flash-kernel on a LAVA lab board
+#   flash-lava-yocto
+#                  flash-yocto on a LAVA lab board
 #   efi-kernel-only
 #                  efi.bin with this kernel for the Yocto rootfs
 #   clean          clean all components and monaco/output/
@@ -69,6 +72,11 @@
 #   FIREHOSE          eMMC firehose programmer used by the flash targets
 #                     (default: monaco/input/prog_firehose_ddr.elf)
 #   QDL, QDL_FLAGS    qdl binary and its options (default: --storage emmc)
+#   FLASH_LAVA_CONNECT
+#                     flash-lava*: 1 interactive, 0 flash-only (default: ask
+#                     on a terminal, else flash-only)
+#   FLASH_LAVA_JOB, FLASH_LAVA_YOCTO_JOB
+#                     the LAVA job definitions (default: monaco/lava/*.yaml)
 #   tz-qti-sign:      SECTOOLS, QTI_SIGN_DIR, SECURITY_PROFILE,
 #                     CASS_CAPABILITY, QTI_SIGN_SERVER_URL,
 #                     QTI_SIGN_SERVER_PORT (see the tz-qti-sign section)
@@ -225,6 +233,10 @@ help:
 	@echo "  flash-kernel   write efi.bin over qdl (board in EDL)"
 	@echo "  yocto          the Yocto BSP image (meta-qcom-arduino, ventuno-q)"
 	@echo "  flash-yocto    write the complete Yocto image over qdl (board in EDL)"
+	@echo "  flash-lava     flash-loader and flash-kernel on a LAVA lab board"
+	@echo "                 (asks: interactive with the serial console, or flash-only)"
+	@echo "  flash-lava-yocto"
+	@echo "                 flash-yocto on a LAVA lab board"
 	@echo "  efi-kernel-only"
 	@echo "                 monaco/output/efi.bin with this kernel for the Yocto rootfs"
 	@echo "  clean          clean all components and monaco/output/"
@@ -234,7 +246,8 @@ help:
 	@echo "  qtestsign-fetch, and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TZ_IMAGE TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS"
-	@echo "  U_BOOT_SPL_CONFIG LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS;"
+	@echo "  U_BOOT_SPL_CONFIG LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE QDL QDL_FLAGS"
+	@echo "  FLASH_LAVA_CONNECT FLASH_LAVA_JOB FLASH_LAVA_YOCTO_JOB;"
 	@echo "  tz-qti-sign: SECTOOLS QTI_SIGN_DIR SECURITY_PROFILE CASS_CAPABILITY"
 	@echo "  QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT; yocto: KAS META_QCOM_ARDUINO_REV"
 
@@ -727,7 +740,8 @@ TZ_MBN     = $(firstword $(wildcard $(MONACO_OUT)/tz.mbn $(MONACO_IN)/$(TZ_INPUT
 
 .PHONY: flash-loader flash-kernel
 
-flash-loader:
+# The inputs of flash-loader and flash-kernel (and flash-lava).
+define check-loader
 	@[ -f "$(FIREHOSE)" ] || \
 		{ echo "ERROR: firehose programmer $(FIREHOSE) missing (see monaco/input/README.md)"; exit 1; }
 	@[ -n "$(TZ_MBN)" ] || \
@@ -738,15 +752,23 @@ flash-loader:
 		{ [ -n "$(call id-of,tz.mbn)" ] && \
 		  [ "$(call id-of,tz.mbn)" = "$(call id-of,$(UEFI_IMAGE))" ]; } || \
 		{ echo "ERROR: tz.mbn and $(UEFI_IMAGE) are from different builds (see $(BUILD_INFO))"; exit 1; }
+endef
+
+define check-kernel
+	@[ -f "$(FIREHOSE)" ] || \
+		{ echo "ERROR: firehose programmer $(FIREHOSE) missing (see monaco/input/README.md)"; exit 1; }
+	@[ -f $(MONACO_OUT)/efi.bin ] || \
+		{ echo "ERROR: monaco/output/efi.bin missing: run 'make efi' first"; exit 1; }
+endef
+
+flash-loader:
+	$(check-loader)
 	$(QDL) $(QDL_FLAGS) $(FIREHOSE) \
 		write tz_a $(TZ_MBN) write tz_b $(TZ_MBN) \
 		write uefi_a $(MONACO_OUT)/$(UEFI_IMAGE) write uefi_b $(MONACO_OUT)/$(UEFI_IMAGE)
 
 flash-kernel:
-	@[ -f "$(FIREHOSE)" ] || \
-		{ echo "ERROR: firehose programmer $(FIREHOSE) missing (see monaco/input/README.md)"; exit 1; }
-	@[ -f $(MONACO_OUT)/efi.bin ] || \
-		{ echo "ERROR: monaco/output/efi.bin missing: run 'make efi' first"; exit 1; }
+	$(check-kernel)
 	$(QDL) $(QDL_FLAGS) $(FIREHOSE) write efi $(MONACO_OUT)/efi.bin
 
 ################################################################################
@@ -812,3 +834,75 @@ efi-kernel-only: linux | $(MONACO_OUT)
 
 yocto-clean:
 	rm -rf $(CURDIR)/yocto
+
+################################################################################
+# flash-lava, flash-lava-yocto: flash a board in the LAVA lab
+# (https://lava.infra.foundries.io, device type monaco-arduino-monza) instead
+# of one on USB
+#
+# LAVA fetches a flat qcomflash tarball over HTTP and runs qdl next to the
+# board (deploy to qdl, boot method qdl, storage emmc).
+#   flash-lava        writes what flash-loader and flash-kernel write: tz_a,
+#                     tz_b, uefi_a, uefi_b and efi. LAVA passes qdl rawprogram
+#                     files, not partition names, so the tarball carries a
+#                     rawprogram0.xml with the sectors of those partitions in
+#                     the VENTUNO Q eMMC layout (qcom-ptool
+#                     platforms/qcs8275-monza/emmc, which flash-yocto and the
+#                     board's stock image write) and an empty patch0.xml.
+#   flash-lava-yocto  writes the complete Yocto image, as flash-yocto does.
+# qcom/lava/submit.sh then uploads the tarball and flashes a board, either
+# interactively (qcom/lava/connect.sh reserves a board, flashes it and opens
+# its serial console; Ctrl+D releases it) or with a one-shot job that boots
+# it to a login prompt (FLASH_LAVA_CONNECT=0, the default without a
+# terminal). The *-package targets only build the tarballs. See
+# qcom/lava/README.md.
+################################################################################
+FLASH_LAVA_DIR            = $(MONACO_OUT)/flash-lava
+FLASH_LAVA_TARBALL        = $(MONACO_OUT)/monaco-flash.qcomflash.tar.gz
+FLASH_LAVA_YOCTO_TARBALL  = $(MONACO_OUT)/monaco-yocto.qcomflash.tar.gz
+FLASH_LAVA_JOB           ?= $(CURDIR)/monaco/lava/flash-lava.yaml
+FLASH_LAVA_YOCTO_JOB     ?= $(CURDIR)/monaco/lava/flash-lava-yocto.yaml
+FLASH_LAVA_SUBMIT         = $(CURDIR)/qcom/lava/submit.sh
+
+# <partition>:<first sector>:<sectors>:<image>, 512-byte sectors
+FLASH_LAVA_PARTS = \
+	tz_a:1153856:8000:tz.mbn tz_b:1918528:8000:tz.mbn \
+	uefi_a:158528:10240:$(UEFI_IMAGE) uefi_b:168768:10240:$(UEFI_IMAGE) \
+	efi:3207312:1048576:efi.bin
+
+.PHONY: flash-lava flash-lava-package flash-lava-yocto flash-lava-yocto-package
+
+flash-lava: flash-lava-package
+	$(FLASH_LAVA_SUBMIT) $(FLASH_LAVA_TARBALL) $(FLASH_LAVA_JOB)
+
+flash-lava-package:
+	$(check-loader)
+	$(check-kernel)
+	rm -rf $(FLASH_LAVA_DIR)
+	mkdir -p $(FLASH_LAVA_DIR)
+	cp $(FIREHOSE) $(FLASH_LAVA_DIR)/prog_firehose_ddr.elf
+	cp $(TZ_MBN) $(FLASH_LAVA_DIR)/tz.mbn
+	cp $(MONACO_OUT)/$(UEFI_IMAGE) $(MONACO_OUT)/efi.bin $(FLASH_LAVA_DIR)/
+	cd $(FLASH_LAVA_DIR) && { \
+		echo '<?xml version="1.0" ?>'; \
+		echo '<data>'; \
+		for p in $(FLASH_LAVA_PARTS); do \
+			set -- $$(echo $$p | tr : ' '); \
+			[ $$(stat -c %s $$4) -le $$(($$3 * 512)) ] || \
+				{ echo "ERROR: $$4 does not fit in $$1" >&2; exit 1; }; \
+			echo "  <program SECTOR_SIZE_IN_BYTES=\"512\" file_sector_offset=\"0\" filename=\"$$4\" label=\"$$1\" num_partition_sectors=\"$$3\" physical_partition_number=\"0\" sparse=\"false\" start_sector=\"$$2\"/>"; \
+		done; \
+		echo '</data>'; \
+	} > rawprogram0.xml
+	printf '<?xml version="1.0" ?>\n<patches>\n</patches>\n' > $(FLASH_LAVA_DIR)/patch0.xml
+	tar -czf $(FLASH_LAVA_TARBALL) -C $(FLASH_LAVA_DIR) .
+	@echo "LAVA flash tarball: $(FLASH_LAVA_TARBALL)"
+
+flash-lava-yocto: flash-lava-yocto-package
+	$(FLASH_LAVA_SUBMIT) $(FLASH_LAVA_YOCTO_TARBALL) $(FLASH_LAVA_YOCTO_JOB)
+
+flash-lava-yocto-package: | $(MONACO_OUT)
+	@[ -f $(YOCTO_FLASH)/prog_firehose_ddr.elf ] && [ -f $(YOCTO_FLASH)/rootfs.img ] || \
+		{ echo "ERROR: $(YOCTO_FLASH) missing or incomplete: run 'make yocto' first"; exit 1; }
+	tar -czf $(FLASH_LAVA_YOCTO_TARBALL) -C $(YOCTO_FLASH) .
+	@echo "LAVA flash tarball: $(FLASH_LAVA_YOCTO_TARBALL)"
