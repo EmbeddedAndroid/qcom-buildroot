@@ -55,7 +55,7 @@
 #   clean          clean all components and monaco/output/
 #
 # Component targets: optee-os, u-boot, u-boot-spl, tfa, fip, uefi, linux,
-# linux-defconfig, buildroot, buildroot-patches, dsp-firmware,
+# linux-patches, linux-defconfig, buildroot, buildroot-patches, dsp-firmware,
 # qtestsign-fetch, and the matching *-clean targets.
 #
 # Configurable variables (command line or environment)
@@ -251,7 +251,7 @@ help:
 	@echo "  clean          clean all components and monaco/output/"
 	@echo ""
 	@echo "Component targets: optee-os u-boot u-boot-spl tfa fip uefi linux"
-	@echo "  linux-defconfig buildroot buildroot-patches dsp-firmware"
+	@echo "  linux-patches linux-defconfig buildroot buildroot-patches dsp-firmware"
 	@echo "  qtestsign-fetch, and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TZ_IMAGE TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS"
@@ -494,6 +494,12 @@ tz-qti-sign:
 ################################################################################
 # Linux kernel
 #
+# The pinned kernel with the patches in monaco/patches/linux/ on top: the
+# iris video codec series (firmware boot through the OP-TEE PAS with the
+# firmware stream mapped by Linux, and the EL2 overlay that enables iris).
+# linux-patches commits them with git am, once: it skips them when HEAD is
+# the last patch (same patch ID).
+#
 # linux-defconfig applies LINUX_DEFCONFIG and the options below; linux runs it
 # when there is no .config. The kernel has no modules, so everything the
 # board needs is built in.
@@ -513,6 +519,7 @@ LINUX_DSP_CONFIGS = \
 LINUX_TEST_CONFIGS = MEMTEST
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
+LINUX_PATCHES    = $(sort $(wildcard $(CURDIR)/monaco/patches/linux/*.patch))
 LINUX_DT         = monaco-arduino-monza
 # Linux runs at EL2 with no hypervisor underneath: the EL2 overlay hands it
 # the resources a hypervisor would own.
@@ -521,9 +528,20 @@ LINUX_DTS_DIR    = $(LINUX_PATH)/arch/arm64/boot/dts/qcom
 LINUX_DTB        = $(MONACO_OUT)/$(LINUX_DT)-el2.dtb
 LINUX_IMAGE      = $(LINUX_PATH)/arch/arm64/boot/vmlinuz.efi
 
-.PHONY: linux-defconfig linux linux-clean
+.PHONY: linux-patches linux-defconfig linux linux-clean
 
-linux-defconfig:
+linux-patches:
+	@last=$$(git patch-id --stable < $(lastword $(LINUX_PATCHES)) | cut -d' ' -f1); \
+	head=$$(git -C $(LINUX_PATH) show HEAD | git patch-id --stable | cut -d' ' -f1); \
+	if [ "$$last" = "$$head" ]; then \
+		echo "linux: monaco/patches/linux already applied"; \
+	else \
+		git -C $(LINUX_PATH) -c user.name=monaco.mk -c user.email=monaco.mk@localhost \
+			am -q $(LINUX_PATCHES) && \
+		echo "linux: applied $(words $(LINUX_PATCHES)) patches from monaco/patches/linux"; \
+	fi
+
+linux-defconfig: linux-patches
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) mrproper
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) $(LINUX_DEFCONFIG)
 	$(LINUX_EXPORTS) $(LINUX_PATH)/scripts/config --file $(LINUX_PATH)/.config \
@@ -542,7 +560,7 @@ linux-defconfig:
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
 # The base DTB is built with symbols (-@) so the EL2 overlay can be applied.
-linux: | $(MONACO_OUT)
+linux: linux-patches | $(MONACO_OUT)
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) linux-defconfig; \
 	fi

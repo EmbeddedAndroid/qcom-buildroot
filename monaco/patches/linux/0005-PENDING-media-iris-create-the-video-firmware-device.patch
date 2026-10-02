@@ -1,0 +1,115 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Fri, 2 Oct 2026 09:04:04 -0400
+Subject: [PATCH 5/7] PENDING: media: iris: create the video-firmware device
+
+The PAS boot with a Linux-managed IOMMU maps the firmware for the stream
+the video core fetches it with, through the device in core->fw_dev. In
+qualcomm-linux that device comes from the context bank series; this tree
+has no context bank devices, so nothing creates it. The firmware stream
+then stays unmapped when Linux runs at EL2 without a hypervisor, and the
+SMMU blocks the core's first fetch, since unknown streams do not bypass.
+
+Create a platform device for the optional video-firmware child node at
+probe, before the video devices that load the firmware on first open,
+so the IOMMU core configures it from the node's iommus. Remove it once
+the core has unloaded the firmware.
+
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ drivers/media/platform/qcom/iris/iris_probe.c | 50 ++++++++++++++++++-
+ 1 file changed, 49 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/qcom/iris/iris_probe.c b/drivers/media/platform/qcom/iris/iris_probe.c
+index e4acf4a74f94..48eb19786e5b 100644
+--- a/drivers/media/platform/qcom/iris/iris_probe.c
++++ b/drivers/media/platform/qcom/iris/iris_probe.c
+@@ -6,6 +6,8 @@
+ #include <linux/clk.h>
+ #include <linux/interconnect.h>
+ #include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
+ #include <linux/pm_domain.h>
+ #include <linux/pm_opp.h>
+ #include <linux/pm_runtime.h>
+@@ -131,6 +133,44 @@ static int iris_init_resets(struct iris_core *core)
+ 				     core->iris_platform_data->controller_rst_tbl_size);
+ }
+ 
++/*
++ * Without a hypervisor, the stream the video core fetches its firmware with
++ * is described by a video-firmware child node; its device maps the firmware
++ * for that stream (see iris_load_fw_to_memory()).
++ */
++static int iris_init_fw_dev(struct iris_core *core)
++{
++	struct platform_device_info info = {};
++	struct platform_device *pdev;
++	struct device_node *np;
++
++	np = of_get_child_by_name(core->dev->of_node, "video-firmware");
++	if (!np)
++		return 0;
++
++	info.fwnode = of_fwnode_handle(np);
++	info.name = np->name;
++	info.id = PLATFORM_DEVID_AUTO;
++	info.parent = core->dev;
++	info.dma_mask = core->iris_platform_data->dma_mask;
++
++	pdev = platform_device_register_full(&info);
++	of_node_put(np);
++	if (IS_ERR(pdev))
++		return PTR_ERR(pdev);
++
++	core->fw_dev = &pdev->dev;
++
++	return 0;
++}
++
++static void iris_deinit_fw_dev(struct iris_core *core)
++{
++	if (core->fw_dev)
++		platform_device_unregister(to_platform_device(core->fw_dev));
++	core->fw_dev = NULL;
++}
++
+ static int iris_init_resources(struct iris_core *core)
+ {
+ 	int ret;
+@@ -207,6 +247,8 @@ static void iris_remove(struct platform_device *pdev)
+ 
+ 	v4l2_device_unregister(&core->v4l2_dev);
+ 
++	iris_deinit_fw_dev(core);
++
+ 	mutex_destroy(&core->lock);
+ }
+ 
+@@ -269,10 +311,14 @@ static int iris_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = v4l2_device_register(dev, &core->v4l2_dev);
++	ret = iris_init_fw_dev(core);
+ 	if (ret)
+ 		return ret;
+ 
++	ret = v4l2_device_register(dev, &core->v4l2_dev);
++	if (ret)
++		goto err_deinit_fw_dev;
++
+ 	ret = iris_register_video_device(core, DECODER);
+ 	if (ret)
+ 		goto err_v4l2_unreg;
+@@ -306,6 +352,8 @@ static int iris_probe(struct platform_device *pdev)
+ 	video_unregister_device(core->vdev_dec);
+ err_v4l2_unreg:
+ 	v4l2_device_unregister(&core->v4l2_dev);
++err_deinit_fw_dev:
++	iris_deinit_fw_dev(core);
+ 
+ 	return ret;
+ }

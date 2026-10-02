@@ -1,0 +1,137 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Vikash Garodia <vikash.garodia@oss.qualcomm.com>
+Date: Thu, 9 Jul 2026 18:05:47 +0530
+Subject: [PATCH 6/7] FROMLIST: dt-bindings: media: qcom,sm8550-iris: Add vpu
+ sub nodes
+
+VPU hardwares have a limitation where VPU streams are associated with
+dedicated addressable address range, as illustrated below
+
+    +-----------------------------------------------------------+
+    | Stream A reserved region (600 MB)                         |
+    | 0x00000000 - 0x25800000                                   |
+    +-----------------------------------------------------------+
+    | Stream B reserved region (3.5 GB)                         |
+    | 0x00000000 - 0xe0000000                                   |
+    +-----------------------------------------------------------+
+    | Other reserved regions                                    |
+    +-----------------------------------------------------------+
+
+Mapping a stream outside its expected range can cause unintended
+behavior, including device crashes, as reported at:
+https://gitlab.freedesktop.org/drm/msm/-/work_items/100
+
+To address this limitation, the subset of stream/s are now represented as
+sub nodes, so that they can be associated to the respective addressable
+range.
+The limitation could be exposed when running usecase like concurrent
+video sessions. The binding have been validated with higher concurrent
+sessions across the SOCs supported under this schema.
+
+Link: https://lore.kernel.org/all/20260709-vpu_iommu_iova_handling-v1-1-72bb62cb2dfd@oss.qualcomm.com/
+Co-developed-by: Vishnu Reddy <busanna.reddy@oss.qualcomm.com>
+Signed-off-by: Vishnu Reddy <busanna.reddy@oss.qualcomm.com>
+Signed-off-by: Vikash Garodia <vikash.garodia@oss.qualcomm.com>
+Tested-by: Daniel J Blueman <daniel@quora.org>
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ .../bindings/media/qcom,sm8550-iris.yaml      | 66 ++++++++++++++++++-
+ 1 file changed, 63 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/media/qcom,sm8550-iris.yaml b/Documentation/devicetree/bindings/media/qcom,sm8550-iris.yaml
+index 0400ca1bff05..997bb0c8b7da 100644
+--- a/Documentation/devicetree/bindings/media/qcom,sm8550-iris.yaml
++++ b/Documentation/devicetree/bindings/media/qcom,sm8550-iris.yaml
+@@ -91,6 +91,51 @@ properties:
+   opp-table:
+     type: object
+ 
++  '#address-cells':
++    const: 2
++
++  '#size-cells':
++    const: 2
++
++  non-pixel:
++    type: object
++    description:
++      Non pixel context bank is needed when video hardware have distinct iommus for non pixel
++      buffers. Non pixel buffers are compressed and internal buffers.
++    properties:
++      iommus:
++        maxItems: 1
++      memory-region:
++        maxItems: 1
++    required:
++      - iommus
++      - memory-region
++    additionalProperties: false
++
++  pixel:
++    type: object
++    description:
++      Pixel context bank is needed when video hardware have distinct iommus for pixel buffers.
++      Pixel buffers are uncompressed buffers.
++    properties:
++      iommus:
++        maxItems: 1
++    required:
++      - iommus
++    additionalProperties: false
++
++  video-firmware:
++    type: object
++    description:
++      Firmware context bank represents the firmware processing domain of the VPU. Required to boot
++      VPU when no hypervisor is present.
++    properties:
++      iommus:
++        maxItems: 1
++    required:
++      - iommus
++    additionalProperties: false
++
+ required:
+   - compatible
+   - power-domain-names
+@@ -98,9 +143,15 @@ required:
+   - interconnect-names
+   - resets
+   - reset-names
+-  - iommus
+   - dma-coherent
+ 
++oneOf:
++  - required:
++      - iommus
++  - required:
++      - non-pixel
++      - pixel
++
+ allOf:
+   - if:
+       properties:
+@@ -177,12 +228,21 @@ examples:
+         resets = <&gcc GCC_VIDEO_AXI0_CLK_ARES>;
+         reset-names = "bus";
+ 
+-        iommus = <&apps_smmu 0x1940 0x0000>,
+-                 <&apps_smmu 0x1947 0x0000>;
+         dma-coherent;
+ 
+         operating-points-v2 = <&iris_opp_table>;
+ 
++        #address-cells = <2>;
++        #size-cells = <2>;
++        iris_non_pixel: non-pixel {
++            iommus = <&apps_smmu 0x1940 0x0000>;
++            memory-region = <&iris_resv>;
++        };
++
++        iris_pixel: pixel {
++            iommus = <&apps_smmu 0x1947 0x0000>;
++        };
++
+         iris_opp_table: opp-table {
+             compatible = "operating-points-v2";
+ 

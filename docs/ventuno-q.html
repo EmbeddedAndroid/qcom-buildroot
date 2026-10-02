@@ -124,7 +124,8 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
         <td><code>qcom_defconfig</code> + <code>tfa-optee.config</code> + <code>arduino-ventuno-q.config</code>;
         SPL: <code>qcom_monaco_spl_defconfig</code></td></tr>
     <tr><td>Linux</td><td>linux-next with Monaco and VENTUNO Q patches not submitted
-        yet (see below).</td>
+        yet (see below), and the patches in <code>monaco/patches/linux/</code>,
+        which the <code>linux-patches</code> target applies once.</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>), with the patches in
         <code>monaco/buildroot-patches/</code>, which the <code>buildroot</code>
@@ -149,6 +150,15 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
     <li>the switch's Training Error masked, which made AER reset the TUSB7340
       link in a loop.</li>
   </ul>
+  <p>
+    <code>monaco/patches/linux/</code> adds the iris video codec series: the
+    firmware boot through the OP-TEE PAS backend (the PAS ID on suspend and
+    resume, no SCM-only content protection call) with Linux mapping the
+    stream the video core fetches its firmware with, as no hypervisor does at
+    EL2, and the EL2 overlay change that enables iris with that stream. The
+    patches are on their way upstream or in the qualcomm-linux kernel, except
+    the one that creates the firmware stream device.
+  </p>
 
   <h3 id="boot-cpu">Boot CPU</h3>
   <p>

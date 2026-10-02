@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gourav Kumar <gouravk@qti.qualcomm.com>
+Date: Mon, 30 Mar 2026 20:59:30 +0530
+Subject: [PATCH 7/7] PENDING: arm64: dts: qcom: Add EL2 support for Iris for
+ monaco
+
+Add support for IRIS on monaco when Linux host running at EL2.
+
+Signed-off-by: Gourav Kumar <gouravk@qti.qualcomm.com>
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/monaco-el2.dtso | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/monaco-el2.dtso b/arch/arm64/boot/dts/qcom/monaco-el2.dtso
+index a7e3270f8609..7cae65ae499c 100644
+--- a/arch/arm64/boot/dts/qcom/monaco-el2.dtso
++++ b/arch/arm64/boot/dts/qcom/monaco-el2.dtso
+@@ -13,7 +13,10 @@ &gpu_zap_shader {
+ };
+ 
+ &iris {
+-	status = "disabled";
++	status = "okay";
++	video-firmware {
++		iommus = <&apps_smmu 0x0882 0x0400>;
++	};
+ };
+ 
+ &remoteproc_adsp {
