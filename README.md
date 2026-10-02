@@ -17,6 +17,7 @@ top-level makefile and subdirectory.
 | Lemans | QCS9100 | Qualcomm IQ-9075 EVK | `lemans.mk` |
 | Monaco | QCS8275 | Arduino VENTUNO Q | `monaco.mk` |
 | Agatti | QRB2210 | Arduino UNO Q | `agatti.mk` |
+| Kodiak | QCS6490 | Qualcomm RB3 Gen 2 | `kodiak.mk` |
 
 Files shared by the Qualcomm platforms (SWIV tool, UKI stub, qrtr-ns and
 tqftpserv init scripts) live in `qcom/`.
@@ -60,6 +61,18 @@ make -f agatti.mk tz-qti-sign   # tz.mbn: QTI-signed BL2 (needs QTI remote signi
 # agatti/input/ (see agatti/input/README.md)
 make -f agatti.mk flash-loader  # tz_a/tz_b + uefi_a/uefi_b
 make -f agatti.mk flash-kernel  # efi partition only
+```
+
+RB3 Gen 2 (Kodiak):
+
+```sh
+make -f kodiak.mk all           # bl2.elf + fip.elf (boot chain), efi.bin (kernel + rootfs)
+make -f kodiak.mk tz-qti-sign   # tz.mbn: QTI-signed BL2 (needs QTI remote signing access)
+
+# Flash with the board in EDL mode; the UFS firehose programmer goes in
+# kodiak/input/ (see kodiak/input/README.md)
+make -f kodiak.mk flash-loader  # tz_a/tz_b + uefi_a/uefi_b
+make -f kodiak.mk flash-kernel  # efi partition only
 ```
 
 ## Firmware blobs (IQ-9075 EVK)

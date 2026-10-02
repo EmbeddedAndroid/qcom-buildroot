@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RB3 Gen 2 · OP-TEE on Qualcomm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_rtd.css">
+</head>
+<body class="rtd" data-page="rb3-gen2">
+<main class="rtd-doc">
+
+  <h1 id="rb3-gen2">Qualcomm RB3 Gen 2</h1>
+  <p>
+    The Qualcomm Dragonwing RB3 Gen 2 development kit is built around the QCS6490
+    (Kodiak) SoC. It boots from UFS.
+  </p>
+  <p><code>kodiak.mk</code> builds for it:</p>
+  <ul>
+    <li>the open boot chain from upstream TF-A and OP-TEE, which support Kodiak
+      and the RB3 Gen 2, and U-Boot;</li>
+    <li>a Linux kernel with a Buildroot initramfs, packed in a UKI.</li>
+  </ul>
+
+  <table class="rtd-table">
+    <tr><th>Makefile</th><td><code>kodiak.mk</code>, board files in <code>kodiak/</code></td></tr>
+    <tr><th>Manifest</th><td><code>kodiak.xml</code> in <a href="https://github.com/ldts/qcom-manifest">qcom-manifest</a></td></tr>
+    <tr><th>CPUs</th><td>4 x Cortex-A55, 4 x Cortex-A78</td></tr>
+    <tr><th>Storage</th><td>UFS, 4096-byte blocks; A/B <code>tz</code> and <code>uefi</code> partitions on LUN 4, <code>efi</code> on LUN 0</td></tr>
+    <tr><th>Console</th><td>QUPv3 debug UART: <code>ttyMSM0</code>, 115200 8N1</td></tr>
+    <tr><th>Stock firmware kept</th><td>PBL, XBL and every partition other than <code>tz_a</code>/<code>tz_b</code>, <code>uefi_a</code>/<code>uefi_b</code> and <code>efi</code></td></tr>
+  </table>
+
+  <h2 id="boot-chain">Boot chain</h2>
+<pre>XBL -&gt; TF-A BL2 (tz) -&gt; BL31 -&gt; OP-TEE -&gt; U-Boot (uefi) -&gt; UKI (efi): Linux at EL2</pre>
+  <ol>
+    <li>XBL loads TF-A BL2 from the <code>tz</code> partition into pIMEM, and the
+      FIP, wrapped in an ELF, from the <code>uefi</code> partition.</li>
+    <li>BL2 loads BL31, OP-TEE (BL32) and U-Boot (BL33) from the FIP.</li>
+    <li>U-Boot starts the UKI from the ESP through UEFI: <code>bootefi bootmgr</code>
+      finds it as <code>EFI/BOOT/bootaa64.efi</code>.</li>
+  </ol>
+  <table class="rtd-table">
+    <tr><th>Stage</th><th>Address</th><th>Notes</th></tr>
+    <tr><td>TF-A BL2</td><td><code>0x1c00e000</code></td><td>pIMEM</td></tr>
+    <tr><td>FIP ELF</td><td><code>0x9fc00000</code></td><td>Loaded by XBL from <code>uefi</code></td></tr>
+    <tr><td>TF-A BL31</td><td><code>0x1c200000</code></td><td>Links QTISECLIB, below</td></tr>
+    <tr><td>OP-TEE</td><td><code>0x1c300000</code></td><td><code>PLATFORM=qcom-kodiak</code></td></tr>
+    <tr><td>U-Boot</td><td><code>0x9f800000</code></td><td><code>qcom_defconfig</code>, RB3 Gen 2 device tree</td></tr>
+  </table>
+
+  <h3 id="images">Images</h3>
+  <table class="rtd-table">
+    <tr><th>Image</th><th>Partitions</th><th>Contents</th><th>Target</th></tr>
+    <tr><td><code>tz.mbn</code></td><td><code>tz_a</code>, <code>tz_b</code></td><td>TF-A BL2 with a QTI signature (no SWIV segment on Kodiak)</td><td><code>make tz-qti-sign</code> (from <code>bl2.elf</code>, made by <code>make bootimage</code>)</td></tr>
+    <tr><td><code>fip.elf</code></td><td><code>uefi_a</code>, <code>uefi_b</code></td><td>FIP (BL31, OP-TEE, U-Boot) in an ELF loaded at <code>0x9fc00000</code>, qtestsign signature</td><td><code>make bootimage</code></td></tr>
+    <tr><td><code>efi.bin</code></td><td><code>efi</code></td><td>512 MiB FAT32 ESP with the UKI as <code>EFI/Linux/uki.efi</code> and <code>EFI/BOOT/bootaa64.efi</code>, formatted with 4096-byte sectors (the UFS block size)</td><td><code>make efi</code></td></tr>
+  </table>
+
+  <h2 id="qtiseclib">QTISECLIB</h2>
+  <p>
+    TF-A BL31 on Kodiak links QTISECLIB (<code>libqtisec.a</code>), Qualcomm's
+    secure setup library for SC7280, which coreboot publishes in its
+    <a href="https://github.com/coreboot/qc_blobs/tree/master/sc7280/qtiseclib">qc_blobs</a>
+    repository under its own license. Without it TF-A builds a stub that does not
+    boot. <code>qtiseclib-fetch</code> (a prerequisite of <code>tfa</code>) downloads
+    release 00069 at a fixed qc_blobs commit into <code>kodiak/blobs/</code> and
+    checks its SHA-256; <code>QTISECLIB=&lt;path&gt;</code> uses another copy.
+  </p>
+
+  <h2 id="sources">Sources</h2>
+  <table class="rtd-table">
+    <tr><th>Tree</th><th>Pinned revision</th><th>Build</th></tr>
+    <tr><td>TF-A</td><td>Upstream master.</td>
+        <td><code>PLAT=rb3gen2 SPD=opteed QTISECLIB_PATH=...</code>, <code>bl2</code> and <code>fip</code></td></tr>
+    <tr><td>OP-TEE</td><td>Upstream master.</td>
+        <td><code>PLATFORM=qcom-kodiak</code> with the PAS pseudo-TA, log level 2 (prints the version)</td></tr>
+    <tr><td>U-Boot</td><td>U-Boot next with the OP-TEE library enabled by
+        <code>tfa-optee.config</code>: without it U-Boot does not copy the OP-TEE
+        node into the OS device tree, and Linux finds no OP-TEE.</td>
+        <td><code>qcom_defconfig</code> + <code>tfa-optee.config</code>,
+        <code>DEVICE_TREE=qcom/qcs6490-rb3gen2</code></td></tr>
+    <tr><td>Linux</td><td>The Qualcomm kernel topic branch with the OP-TEE
+        support (<code>tech/security/optee</code> in
+        <a href="https://github.com/qualcomm-linux/kernel-topics">kernel-topics</a>,
+        as for the IQ-9075 EVK), which carries the Kodiak EL2 overlay.</td>
+        <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST and no
+        modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
+        Kodiak EL2 overlay)</td></tr>
+    <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>)</td>
+        <td>The rootfs, a gzip-compressed cpio used as the initramfs: xtest,
+        stress-ng, kvmtool, the KVM unit tests and a KVM test guest</td></tr>
+  </table>
+
+  <h2 id="build">Build</h2>
+<pre>make toolchains
+make all                         # bl2.elf, fip.elf, efi.bin in kodiak/output/
+make tz-qti-sign QTI_SIGN_DIR=... CASS_CAPABILITY=... \
+     QTI_SIGN_SERVER_URL=... QTI_SIGN_SERVER_PORT=...   # tz.mbn</pre>
+  <p>
+    <code>tz-qti-sign</code> signs <code>bl2.elf</code> with Qualcomm
+    <code>sectools</code> through the QTI remote signing service. The Kodiak TZ
+    security profile (<code>kodiak_tz_security_profile.xml</code> in
+    <code>QTI_SIGN_DIR</code>) comes from the Qualcomm signing package. XBL boots
+    only a QTI-signed TZ image; without one in <code>kodiak/output/</code>,
+    <code>flash-loader</code> uses a QTI-signed <code>tz.mbn</code> placed in
+    <code>kodiak/input/</code>.
+  </p>
+  <p>
+    Each <code>make</code> invocation stamps <code>BUILD_ID</code> (default
+    <code>kodiak-&lt;UTC date-time&gt;</code>) into the TF-A build string, the
+    OP-TEE version, the U-Boot and Linux versions and <code>/etc/issue</code>; the
+    build fails if an image lacks it, and <code>kodiak/output/build-info.txt</code>
+    records the identifier of each image. The kernel is built with
+    <code>CONFIG_MEMTEST</code> (see the <a href="ventuno-q.html#memtest">VENTUNO Q
+    page</a>).
+  </p>
+
+  <h2 id="flash">Flash</h2>
+  <p>
+    qdl writes the images by partition name; the partition tables and everything
+    else on the UFS stay as they are. The UFS firehose programmer comes from the
+    QCM6490 boot binaries and goes in <code>kodiak/input/</code> (or set
+    <code>FIREHOSE</code>); see <code>kodiak/input/README.md</code>.
+  </p>
+<pre>make flash-loader    # tz_a, tz_b &lt;- tz.mbn; uefi_a, uefi_b &lt;- fip.elf
+make flash-kernel    # efi &lt;- efi.bin</pre>
+  <p>which run:</p>
+<pre>qdl --storage ufs prog_firehose_ddr.elf \
+    write tz_a tz.mbn write tz_b tz.mbn \
+    write uefi_a fip.elf write uefi_b fip.elf
+qdl --storage ufs prog_firehose_ddr.elf write efi efi.bin</pre>
+  <p>
+    <code>flash-lava</code> writes the same partitions on an RB3 Gen 2 in the LAVA
+    lab (device type <code>qcs6490-rb3gen2</code>), as on the
+    <a href="ventuno-q.html#flash-lava">VENTUNO Q</a>: a <code>rawprogram0.xml</code>
+    for LUN 0 and a <code>rawprogram4.xml</code> for LUN 4, at their place in the
+    RB3 Gen 2 UFS layout (qcom-ptool <code>qcs6490-rb3gen2/ufs</code>).
+  </p>
+
+  <h2 id="kvm">KVM</h2>
+  <p>
+    Linux runs at EL2, so KVM is available in VHE mode (<code>/dev/kvm</code>).
+    The rootfs carries kvmtool, the KVM unit tests in
+    <code>/opt/kvm-unit-tests</code> and a small Linux guest in
+    <code>/opt/kvm-guest</code>, as on the <a href="ventuno-q.html#kvm">VENTUNO Q</a>.
+    The Cortex-A55 and Cortex-A78 clusters have separate PMUs: run the
+    <code>pmu-*</code> tests with the VM held on one cluster.
+  </p>
+
+</main>
+<script src="_rtd.js"></script>
+</body>
+</html>

@@ -12,7 +12,7 @@ test('NAV is ordered and complete', () => {
     'iq-9075-evk.html', 'quick-start.html',
     'lemans-focused.html', 'lemans.html',
     'ventuno-q.html', 'quick-start-ventuno-q.html', 'ventuno-q-focused.html',
-    'uno-q.html',
+    'uno-q.html', 'rb3-gen2.html',
   ]);
 });
 
@@ -34,7 +34,7 @@ test('pages of a group are contiguous', () => {
     last = g;
   });
   assert.deepStrictEqual(seen, ['Concepts', 'IQ-9075 EVK (Lemans)', 'Arduino VENTUNO Q (Monaco)',
-    'Arduino UNO Q (Agatti)']);
+    'Arduino UNO Q (Agatti)', 'RB3 Gen 2 (Kodiak)']);
 });
 
 test('basename normalizes paths', () => {
@@ -82,7 +82,7 @@ test('groupHead: unknown group has no head', () => {
 
 test('prevNextFor: ends are null, middle links both ways', () => {
   assert.strictEqual(rtd.prevNextFor(rtd.NAV, 'index.html').prev, null);
-  assert.strictEqual(rtd.prevNextFor(rtd.NAV, 'uno-q.html').next, null);
+  assert.strictEqual(rtd.prevNextFor(rtd.NAV, 'rb3-gen2.html').next, null);
   const mid = rtd.prevNextFor(rtd.NAV, 'quick-start.html');
   assert.strictEqual(mid.prev.file, 'iq-9075-evk.html');
   assert.strictEqual(mid.next.file, 'lemans-focused.html');

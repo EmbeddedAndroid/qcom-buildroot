@@ -1,0 +1,51 @@
+# LAVA job for `make flash-lava`: flash-loader + flash-kernel on a lab board.
+#
+# The tarball (kodiak/output/kodiak-flash.qcomflash.tar.gz) is flat and holds
+# the firehose programmer, tz.mbn, fip.elf, efi.bin, rawprogram0.xml (efi, LUN
+# 0) and rawprogram4.xml (tz_a/tz_b, uefi_a/uefi_b, LUN 4). The partition
+# tables and the rest of the UFS stay as they are, so the patch files are
+# empty. The UKI carries the Buildroot rootfs as its initramfs, so the board
+# reaches a login prompt whatever its rootfs partition holds.
+#
+# qcom/lava/submit.sh replaces <ARTIFACT_URL> and <ARTIFACT_TOKEN> with the
+# upload's URL and the name of the LAVA remote artifact token that holds its
+# secret; connect.sh reads device_type, storage and the qdl file lists from
+# here for the interactive session.
+
+device_type: qcs6490-rb3gen2
+job_name: kodiak-flash-lava
+priority: medium
+visibility: personal
+timeouts:
+  job:
+    minutes: 30
+  connection:
+    minutes: 5
+actions:
+- deploy:
+    to: qdl
+    qcomflash:
+      url: <ARTIFACT_URL>
+      headers:
+        Authorization: <ARTIFACT_TOKEN>
+    timeout:
+      minutes: 15
+- boot:
+    method: qdl
+    firehose_program: prog_firehose_ddr.elf
+    rawprogram: rawprogram0.xml rawprogram4.xml
+    patch: patch0.xml patch4.xml
+    storage: ufs
+    debug: true
+    timeout:
+      minutes: 10
+- boot:
+    method: minimal
+    auto_login:
+      login_prompt: 'buildroot login:'
+      username: root
+    # A bare '# ' also matches kernel lines such as "PME# supported".
+    prompts:
+    - '\n# '
+    timeout:
+      minutes: 10

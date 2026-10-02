@@ -24,3 +24,9 @@ pi3.cfg
 !/agatti/input/README.md
 /agatti/output/*
 !/agatti/output/README.md
+# kodiak.mk outputs, board inputs and fetched blobs (see kodiak/*/README.md)
+/kodiak/input/*
+!/kodiak/input/README.md
+/kodiak/output/*
+!/kodiak/output/README.md
+/kodiak/blobs/
