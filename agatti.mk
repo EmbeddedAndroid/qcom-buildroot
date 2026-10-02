@@ -40,8 +40,8 @@
 #   clean          clean all components and agatti/output/
 #
 # Component targets: optee-os, u-boot, tfa, fip, linux, linux-defconfig,
-# linux-patches, linux-modules, buildroot, qtestsign-fetch, and the matching *-clean
-# targets.
+# linux-patches, linux-modules, buildroot, qtestsign-fetch, video-streams, and
+# the matching *-clean targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
@@ -58,6 +58,8 @@
 #                     flash-lava: 1 interactive, 0 flash-only (default: ask
 #                     on a terminal, else flash-only)
 #   FLASH_LAVA_JOB    the LAVA job definition (default: agatti/lava/flash-lava.yaml)
+#   QCOM_VIDEO_TEST   y to put FFmpeg and the video-codec test streams in
+#                     the rootfs (default: y; see qcom/video/video.mk)
 #   tz-qti-sign:      SECTOOLS, QTI_SIGN_DIR, SECURITY_PROFILE,
 #                     CASS_CAPABILITY, QTI_SIGN_SERVER_URL,
 #                     QTI_SIGN_SERVER_PORT (see the tz-qti-sign section)
@@ -132,6 +134,10 @@ TF_A_PATH ?= $(ROOT)/arm-trusted-firmware
 
 include common.mk
 include toolchain.mk
+
+# FFmpeg and the reference streams of the video-codec test (qcom/video).
+QCOM_VIDEO_TEST ?= y
+include qcom/video/video.mk
 
 OPTEE_OS_COMMON_EXTRA_FLAGS += TEE_IMPL_VERSION=$(BUILD_ID)
 

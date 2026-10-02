@@ -148,6 +148,22 @@ make flash-kernel    # efi &lt;- efi.bin</pre>
     <code>/opt/kvm-guest</code>, as on the <a href="ventuno-q.html#kvm">VENTUNO Q</a>.
   </p>
 
+  <h2 id="video">Video codec test</h2>
+  <p>
+    With <code>QCOM_VIDEO_TEST=y</code> (the default) the rootfs carries
+    FFmpeg with its V4L2 mem2mem wrappers and, in
+    <code>/usr/share/video-codec</code>, H.264, HEVC and VP9 reference streams
+    with the MD5 of every frame of their software decode. The
+    <code>video-codec</code> test definition decodes them on the video core
+    and compares every frame. <code>qcom/video/video.mk</code> holds the
+    Buildroot settings and the <code>video-streams</code> target, which runs
+    <code>qcom/video/mk-video-streams.sh</code>; that script needs an
+    <code>ffmpeg</code> with libx264, libx265 and libvpx on the build host.
+    Another board takes the same change by setting
+    <code>QCOM_VIDEO_TEST = y</code> and including
+    <code>qcom/video/video.mk</code> after <code>common.mk</code>.
+  </p>
+
 </main>
 <script src="_rtd.js"></script>
 </body>
