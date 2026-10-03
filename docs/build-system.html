@@ -165,6 +165,51 @@ repo sync -j4 --no-clone-bundle</pre>
     leaves FFmpeg and the streams out.
   </p>
 
+  <h2 id="npu-test">NPU test</h2>
+  <p>
+    The <code>inference</code> test definition (test-definitions
+    <code>automated/linux/inference</code>) runs an image classifier with the
+    Qualcomm AI Runtime (QAIRT) <code>qnn-net-run</code> on the HTP, the
+    Hexagon NPU behind the CDSP, over FastRPC, and on the QNN CPU backend, and
+    checks the classes, the agreement of the two and the HTP output against
+    the SDK's x86 HTP simulation, and reports the latency of both. A board
+    makefile enables what the image needs for it with one line after
+    <code>common.mk</code> and its <code>BR2_ROOTFS_OVERLAY</code> assignment:
+  </p>
+<pre>include qcom/npu/npu.mk</pre>
+  <ul>
+    <li>In <code>/usr/share/npu-qnn/model</code>: MobileNetV2 from the ONNX
+      model zoo (Apache-2.0) as two DLCs, fp32 for the CPU backend and 8-bit
+      with per-channel weights for the HTP, seven public domain or CC0 images
+      from Wikimedia Commons preprocessed to the model input, the expected
+      class of each (the ONNX Runtime fp32 top-1, equal to its label), the x86
+      CPU outputs and the HTP simulation outputs of each Hexagon architecture
+      the boards have (v68, v73, v75), and <code>MANIFEST.sha256</code>.</li>
+    <li>The <code>npu-model</code> target builds it on the build host with
+      <code>qcom/npu/mk-npu-model.sh</code> from pinned inputs, each checked
+      against its hash: the model, the images, uv (for Python 3.10 and the
+      packages of <code>qcom/npu/requirements.txt</code>) and the QAIRT SDK
+      zip from Qualcomm's download URL, whose converters make the DLCs. The
+      SDK stays on the build host: its license does not allow redistributing
+      it on its own, so nothing of it goes into the image. It needs an x86_64
+      host with <code>curl</code>, <code>unzip</code>, <code>libc++1</code>,
+      <code>libc++abi1</code> and <code>libatomic1</code>; downloads are kept
+      in <code>out/npu-cache</code>.</li>
+    <li>The test fetches nothing itself: the LAVA job writes the QAIRT SDK zip
+      to the overlay partition, downloaded from Qualcomm's URL for each job,
+      and the test extracts from it only what it runs.</li>
+  </ul>
+  <p>
+    The board brings the rest: the FastRPC driver and userspace
+    (<code>fastrpc</code>, <code>qrtr</code>, <code>tqftpserv</code> and the
+    rpcd daemons), the DSP firmware and the DSP runtime the firmware
+    authorises, and the board facts for the test (the Hexagon architecture
+    of the HTP, and the QNN device id and remoteproc of each NSP). The
+    kernel leaves <code>ARM_SMCCC_SOC_ID</code> out, since QAIRT reads
+    <code>/sys/devices/soc0/soc_id</code> as the Qualcomm socinfo number.
+    <code>QCOM_NPU_TEST=n</code> leaves the model out (the test then skips).
+  </p>
+
   <h2 id="board-files">Adding a board</h2>
   <ol>
     <li>A manifest <code>&lt;platform&gt;.xml</code> in qcom-manifest that links

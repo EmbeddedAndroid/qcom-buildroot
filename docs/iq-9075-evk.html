@@ -125,6 +125,13 @@ make flash-kernel   # LUN 0: efi.bin</pre>
     <code>qcom/vpu</code> by <code>linux-firmware</code>), decoders
     <code>h264 hevc vp9</code>, encoders <code>h264 hevc</code>.
   </p>
+  <p>
+    And the model of the <code>npu-qnn</code> test (see
+    <a href="build-system.html#npu-test">NPU test</a>), which runs on both
+    NSPs: board facts <code>HTP_ARCH=v73</code>,
+    <code>HTP_DEVICES="0:cdsp 1:cdsp1"</code> (QNN HTP device 0 is the
+    CDSP, device 1 the CDSP1).
+  </p>
 
 </main>
 <script src="_rtd.js"></script>

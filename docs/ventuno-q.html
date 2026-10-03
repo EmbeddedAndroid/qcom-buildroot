@@ -335,6 +335,12 @@ ffmpeg -c:v h264_v4l2m2m -i $s -fps_mode passthrough -pix_fmt nv12 -f framemd5 -
     <code>/lib/firmware/qcom/vpu/vpu30_p4_s6.mbn</code>, decoders
     <code>h264 hevc vp9</code>, encoders <code>h264 hevc</code>.
   </p>
+  <p>
+    The rootfs also carries the model of the <code>npu-qnn</code> test (see
+    <a href="build-system.html#npu-test">NPU test</a>), which runs on the
+    CDSP's HTP: board facts <code>HTP_ARCH=v75</code>,
+    <code>HTP_DEVICES=0:cdsp</code>.
+  </p>
 
   <h2 id="kvm">KVM</h2>
   <p>

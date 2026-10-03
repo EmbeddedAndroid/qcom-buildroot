@@ -79,6 +79,9 @@
 #                     the LAVA job definitions (default: monaco/lava/*.yaml)
 #   QCOM_VIDEO_TEST   y to put FFmpeg and the video-codec test streams in
 #                     the rootfs (default: y; see qcom/video/video.mk)
+#   QCOM_NPU_TEST     y to build the npu-qnn test model into
+#                     the rootfs (default: y; needs an x86_64 host, see
+#                     qcom/npu/npu.mk)
 #   tz-qti-sign:      SECTOOLS, QTI_SIGN_DIR, SECURITY_PROFILE,
 #                     CASS_CAPABILITY, QTI_SIGN_SERVER_URL,
 #                     QTI_SIGN_SERVER_PORT (see the tz-qti-sign section)
@@ -184,6 +187,7 @@ TF_A_PATH ?= $(ROOT)/arm-trusted-firmware
 include common.mk
 include toolchain.mk
 include qcom/video/video.mk
+include qcom/npu/npu.mk
 
 # common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
 # which turns the Monaco target.mk's '+= qcom_pas/...' into a no-op. Append

@@ -59,6 +59,9 @@
 #                         (default: provision_1_2.xml — grows HLOS LUN 0)
 #   QCOM_VIDEO_TEST       y to put FFmpeg and the video-codec test streams in
 #                         the rootfs (default: y; see qcom/video/video.mk)
+#   QCOM_NPU_TEST         y to build the npu-qnn test model into
+#                         the rootfs (default: y; needs an x86_64 host, see
+#                         qcom/npu/npu.mk)
 ################################################################################
 
 ################################################################################
@@ -241,6 +244,7 @@ BOOTAA64_EFI = $(CURDIR)/lemans/input/bootaa64.efi
 include common.mk
 include toolchain.mk
 include qcom/video/video.mk
+include qcom/npu/npu.mk
 
 # common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
 # which turns the platform target.mk's '+= qcom_pas/...' into a no-op. Append
