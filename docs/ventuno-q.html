@@ -130,7 +130,10 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>), with the patches in
         <code>monaco/buildroot-patches/</code>, which the <code>buildroot</code>
         target applies once: Mesa 25.1.8 from Buildroot 2025.08, since Mesa 25.0
-        does not know the Adreno 623.</td>
+        does not know the Adreno 623, and for inference on the GPU, Mesa
+        RustiCL (OpenCL) with the OpenCL headers and ICD loader from 2025.08,
+        RustiCL on freedreno, the TensorFlow Lite GPU delegate, XNNPACK on
+        AArch64 and SPIRV-Tools 2024.1.</td>
         <td>The rootfs, a gzip-compressed cpio used as the initramfs</td></tr>
   </table>
   <p>
@@ -300,7 +303,13 @@ aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
       (<code>qcom/a650_sqe.fw</code>) from linux-firmware;</li>
     <li><code>egl-readback</code>: renders on the GPU through the render node,
       without a display, reads the pixels back and checks them, then times 500
-      frames. It exits 0 only if the GPU drew the expected pixels.</li>
+      frames. It exits 0 only if the GPU drew the expected pixels;</li>
+    <li>OpenCL from Mesa RustiCL with the ICD loader and <code>clinfo</code>.
+      Mesa 25.1 exposes the GPU to OpenCL only when <code>RUSTICL_ENABLE</code>
+      names its driver, which <code>/etc/profile.d/rusticl.sh</code> does;</li>
+    <li>TensorFlow Lite with XNNPACK and its GPU delegate (OpenCL backend), as
+      the stock image runs models on the GPU, and <code>tflite-run</code>,
+      which the <code>inference</code> test drives on the CPU and the GPU.</li>
   </ul>
   <p>
     The EL2 overlay disables the zap shader: Linux takes the GPU out of secure
@@ -339,10 +348,10 @@ ffmpeg -c:v h264_v4l2m2m -i $s -fps_mode passthrough -pix_fmt nv12 -f framemd5 -
     <code>h264 hevc vp9</code>, encoders <code>h264 hevc</code>.
   </p>
   <p>
-    The rootfs also carries the model of the <code>npu-qnn</code> test (see
+    The rootfs also carries the model of the <code>inference</code> test (see
     <a href="build-system.html#npu-test">NPU test</a>), which runs on the
-    CDSP's HTP: board facts <code>HTP_ARCH=v75</code>,
-    <code>HTP_DEVICES=0:cdsp</code>.
+    CDSP's HTP (board facts <code>HTP_ARCH=v75</code>,
+    <code>HTP_DEVICES=0:cdsp</code>), the CPU and the GPU.
   </p>
 
   <h2 id="kvm">KVM</h2>

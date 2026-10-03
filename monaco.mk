@@ -167,6 +167,18 @@ BR2_PACKAGE_MESA3D_OPENGL_ES                = y
 BR2_PACKAGE_MESA3D_GBM                      = y
 BR2_PACKAGE_LIBDRM                          = y
 BR2_PACKAGE_EGL_READBACK_EXT                = y
+# Inference on the CPU and the GPU, as the stock image does it: OpenCL from
+# Mesa RustiCL on freedreno (with the ICD loader and clinfo) and TensorFlow
+# Lite with XNNPACK and its GPU delegate (OpenCL backend), which tflite-run
+# drives for the inference test. Mesa 25.1 exposes the freedreno device
+# only when RUSTICL_ENABLE names it (monaco/overlay/etc/profile.d).
+BR2_PACKAGE_MESA3D_LLVM                     = y
+BR2_PACKAGE_MESA3D_OPENCL                   = y
+BR2_PACKAGE_MESA3D_RUSTICL                  = y
+BR2_PACKAGE_CLINFO                          = y
+BR2_PACKAGE_TENSORFLOW_LITE                 = y
+BR2_PACKAGE_TENSORFLOW_LITE_GPU             = y
+BR2_PACKAGE_TFLITE_RUN_EXT                  = y
 # KVM: kvmtool and the KVM unit tests built for it, with their runner (bash)
 # in /opt/kvm-unit-tests, and a small Linux guest (kernel and BusyBox
 # initramfs) in /opt/kvm-guest. kvmtool reads console input only from a
@@ -607,10 +619,23 @@ linux-clean:
 
 ################################################################################
 # Buildroot patches: monaco/buildroot-patches/*.patch, applied in order to the
-# Buildroot tree (common.xml pins 2025.05) before it builds. A patch that
-# reverses cleanly is already applied and is skipped.
+# Buildroot tree (common.xml pins 2025.05) before it builds. The last patch
+# that reverses cleanly marks the end of what is already applied (a later
+# patch can change the context of an earlier one, so earlier ones need not
+# reverse); the patches after it are applied.
 #   0001  Mesa 25.1.8 from Buildroot 2025.08; Mesa 25.0 does not know the
 #         Adreno 623
+#   0002  opencl-headers and
+#   0003  opencl-icd-loader, from Buildroot 2025.08
+#   0004  Mesa RustiCL from Buildroot 2025.08
+#   0005  RustiCL on freedreno
+#   0006  the TensorFlow Lite GPU delegate (OpenCL backend)
+#   0007  XNNPACK on AArch64 (TensorFlow Lite's CPU path)
+#   0008  SPIRV-Headers and SPIRV-Tools 1.3.280.0 (2024.1, which Mesa 25.1's
+#         OpenCL C compiler needs) and a SPIRV-LLVM-Translator v15 that
+#         builds against them
+# An existing output directory keeps the Mesa it built without OpenCL:
+# make mesa3d-dirclean there after enabling it.
 ################################################################################
 BR_PATCHES = $(sort $(wildcard $(CURDIR)/monaco/buildroot-patches/*.patch))
 
@@ -619,8 +644,15 @@ BR_PATCHES = $(sort $(wildcard $(CURDIR)/monaco/buildroot-patches/*.patch))
 buildroot: buildroot-patches
 
 buildroot-patches:
-	@for p in $(BR_PATCHES); do \
-		if git -C $(ROOT)/buildroot apply -R --check $$p 2>/dev/null; then \
+	@n=0; i=0; \
+	for p in $(BR_PATCHES); do \
+		i=$$((i + 1)); \
+		git -C $(ROOT)/buildroot apply -R --check $$p 2>/dev/null && n=$$i; \
+	done; \
+	i=0; \
+	for p in $(BR_PATCHES); do \
+		i=$$((i + 1)); \
+		if [ $$i -le $$n ]; then \
 			echo "buildroot: $${p##*/} already applied"; \
 		else \
 			echo "buildroot: applying $${p##*/}"; \
@@ -735,13 +767,14 @@ dsp-firmware-clean:
 # ukify bundles the kernel, the DTB, the Buildroot initramfs and the command
 # line into one EFI binary. efi.bin is a FAT32 image holding it both as
 # EFI/Linux/uki.efi and as the removable-media fallback EFI/BOOT/bootaa64.efi,
-# which U-Boot's bootefi bootmgr starts. 512-byte sectors match the eMMC
-# block size and keep the 256 MiB volume FAT32.
+# which U-Boot's bootefi bootmgr starts. The image fills the 512 MiB efi
+# partition: with OpenCL and TensorFlow Lite the UKI is about 214 MB. 512-byte
+# sectors match the eMMC block size and keep the volume FAT32.
 #
 # Host dependencies: systemd-ukify mtools dosfstools
 ################################################################################
 BR_INITRAMFS  = $(ROOT)/out-br/images/rootfs.cpio.gz
-EFI_BIN_SIZE ?= 256M
+EFI_BIN_SIZE ?= 512M
 
 LINUX_CMDLINE ?= \
 	root=/dev/ram0 rw \
