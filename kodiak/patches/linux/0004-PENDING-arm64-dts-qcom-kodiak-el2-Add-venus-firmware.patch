@@ -1,0 +1,37 @@
+From 009a0ac7643b0b360e276a1afa5b85dd8f583d91 Mon Sep 17 00:00:00 2001
+From: Vishnu Reddy <busanna.reddy@oss.qualcomm.com>
+Date: Fri, 17 Jul 2026 15:02:23 +0530
+Subject: [PATCH] PENDING: arm64: dts: qcom: kodiak-el2: Add venus firmware sub
+ node
+
+A dedicated firmware sub-device is required to map the firmware
+region to the device's IOMMU mapped stream ID, which is the firmware
+stream ID, in order to boot the Iris firmware when no hypervisor is
+present. Enable venus and add the video-firmware sub-device with its
+IOMMU stream ID for EL2 boot on Kodiak.
+
+Signed-off-by: Vishnu Reddy <busanna.reddy@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/kodiak-el2.dtso | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/kodiak-el2.dtso b/arch/arm64/boot/dts/qcom/kodiak-el2.dtso
+index 0b3a69a..0d60b7c 100644
+--- a/arch/arm64/boot/dts/qcom/kodiak-el2.dtso
++++ b/arch/arm64/boot/dts/qcom/kodiak-el2.dtso
+@@ -27,7 +27,11 @@
+ };
+ 
+ &venus {
+-	status = "disabled";
++	status = "okay";
++
++	video-firmware {
++		iommus = <&apps_smmu 0x21a2 0x0>;
++	};
+ };
+ 
+ &watchdog {
+-- 
+2.47.3
+

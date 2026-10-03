@@ -93,6 +93,21 @@
     userspace.
   </p>
 
+  <h2 id="video">Video codec</h2>
+  <p>
+    The video core of the RB3 Gen 2 (<code>qcom,sc7280-venus</code>) is driven
+    by iris, which registers a V4L2 mem2mem decoder (H.264, HEVC, VP9) and
+    encoder (H.264, HEVC). Its firmware, <code>qcom/vpu/vpu20_p1.mbn</code>
+    (<code>VIDEO.VPU.2.0-00055-PROD-1</code>) from linux-firmware, is in the
+    rootfs and checked against <code>kodiak/dsp-firmware.sha256</code> with
+    the DSP firmware; iris loads it on the first open of a video node, and
+    OP-TEE authenticates and starts it through the PAS pseudo-TA. With no
+    hypervisor, Linux maps the firmware for the stream the video core fetches
+    it with: the Kodiak EL2 overlay of the pinned kernel disables the video
+    core, and the last patch in <code>kodiak/patches/linux/</code> enables it
+    with that stream (<code>video-firmware</code>).
+  </p>
+
   <h2 id="sources">Sources</h2>
   <table class="rtd-table">
     <tr><th>Tree</th><th>Pinned revision</th><th>Build</th></tr>
@@ -112,14 +127,15 @@
         patches in <code>kodiak/patches/linux/</code> on top: two fixes in the
         PAS remote processor code with the OP-TEE backend and one in the ADSP
         audio clock driver, without which a DSP cannot be stopped and started
-        again.</td>
+        again, and the video core enabled at EL2 (see
+        <a href="#video">Video codec</a>).</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST, the PAS
-        remote processors with the OP-TEE backend, and no modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
+        remote processors with the OP-TEE backend, iris, and no modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
         Kodiak EL2 overlay)</td></tr>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>)</td>
         <td>The rootfs, a gzip-compressed cpio used as the initramfs: xtest,
-        stress-ng, kvmtool, the KVM unit tests, a KVM test guest and the DSP
-        firmware</td></tr>
+        stress-ng, kvmtool, the KVM unit tests, a KVM test guest, the DSP
+        firmware and the video codec firmware</td></tr>
   </table>
 
   <h2 id="build">Build</h2>

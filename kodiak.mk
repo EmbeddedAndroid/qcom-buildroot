@@ -399,6 +399,8 @@ tz-qti-sign:
 # and QRTR for the ADSP and the CDSP.
 # LINUX_TEST_CONFIGS: MEMTEST, the early memory test that memtest=<N> on the
 # kernel command line runs (N patterns over all free memory).
+# LINUX_VIDEO_CONFIGS: the iris video codec driver (V4L2 mem2mem decoder and
+# encoder), which binds the RB3 Gen 2 video core.
 # linux fails if any of them is not built in.
 ################################################################################
 LINUX_DSP_CONFIGS = \
@@ -406,6 +408,7 @@ LINUX_DSP_CONFIGS = \
 	RPMSG RPMSG_QCOM_GLINK RPMSG_QCOM_GLINK_SMEM QCOM_SMEM QCOM_SMP2P \
 	QCOM_IPCC QCOM_AOSS_QMP QCOM_RPMHPD QRTR QRTR_SMD QCOM_PD_MAPPER
 LINUX_TEST_CONFIGS = MEMTEST
+LINUX_VIDEO_CONFIGS = MEDIA_SUPPORT VIDEO_DEV VIDEO_QCOM_IRIS
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
 LINUX_PATCHES    = $(sort $(wildcard $(CURDIR)/kodiak/patches/linux/*.patch))
@@ -443,14 +446,14 @@ linux-defconfig: linux-patches
 		-e KVM \
 		-d LOCALVERSION_AUTO \
 		-d MODULES \
-		$(addprefix -e ,$(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS))
+		$(addprefix -e ,$(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS) $(LINUX_VIDEO_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
 linux: linux-patches | $(KODIAK_OUT)
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) linux-defconfig; \
 	fi
-	@for c in $(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS); do \
+	@for c in $(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS) $(LINUX_VIDEO_CONFIGS); do \
 		grep -qx "CONFIG_$$c=y" $(LINUX_PATH)/.config || \
 		{ echo "ERROR: CONFIG_$$c is not built in: run 'make linux-defconfig'"; exit 1; }; \
 	done
@@ -472,6 +475,9 @@ linux-clean:
 #                                name, and their protection-domain lists
 #   /lib/firmware/               LICENSE.qcom and qcom/NOTICE.txt, the terms
 #                                they are distributed under
+#   /lib/firmware/qcom/vpu/      the video codec firmware (VIDEO_FW_FILES,
+#                                VIDEO.VPU.2.0-00055-PROD-1), which iris loads
+#                                on the first open of a video node
 # linux-firmware ships the files in qcom/qcm6490/ and its WHENCE links them
 # into qcom/qcs6490/; DSP_FW_REV has ADSP.HT.5.5.c8-00246-KODIAK-1 and
 # CDSP.HT.2.5.c3-00130-KODIAK-1. kodiak/dsp-firmware.sha256 holds the SHA-256
@@ -483,6 +489,7 @@ DSP_FW_REV   ?= 664f8b6adeba20be0960d9cb1b2ad8c5a4d7e0e3
 DSP_FW_SRC    = qcom/qcm6490
 DSP_FW_DIR    = qcom/qcs6490
 DSP_FW_FILES  = adsp.mbn adspr.jsn adsps.jsn adspua.jsn battmgr.jsn cdsp.mbn cdspr.jsn
+VIDEO_FW_FILES = qcom/vpu/vpu20_p1.mbn
 DSP_FW_SHA256 = $(CURDIR)/kodiak/dsp-firmware.sha256
 DSP_OUT       = $(KODIAK_BLOBS)/dsp
 DSP_OVERLAY   = $(DSP_OUT)/overlay
@@ -494,19 +501,23 @@ buildroot: dsp-firmware
 
 dsp-firmware:
 	mkdir -p $(DSP_OUT)
-	[ "$$($(DSP_FW_GIT) rev-parse -q --verify HEAD 2>/dev/null)" = $(DSP_FW_REV) ] || { \
+	$(DSP_FW_GIT) cat-file -e $(DSP_FW_REV) 2>/dev/null || { \
 		rm -rf $(DSP_OUT)/linux-firmware && \
 		git init -q $(DSP_OUT)/linux-firmware && \
-		$(DSP_FW_GIT) fetch -q --depth=1 --filter=blob:none $(DSP_FW_REPO) $(DSP_FW_REV) && \
-		$(DSP_FW_GIT) sparse-checkout set --no-cone /LICENSE.qcom /qcom/NOTICE.txt \
-			$(addprefix /$(DSP_FW_SRC)/,$(DSP_FW_FILES)) && \
-		$(DSP_FW_GIT) checkout -q FETCH_HEAD; }
+		$(DSP_FW_GIT) fetch -q --depth=1 --filter=blob:none $(DSP_FW_REPO) $(DSP_FW_REV); }
+	@# Set on every run, so a clone made for an earlier file list gets the new files.
+	$(DSP_FW_GIT) sparse-checkout set --no-cone /LICENSE.qcom /qcom/NOTICE.txt \
+		$(addprefix /$(DSP_FW_SRC)/,$(DSP_FW_FILES)) $(addprefix /,$(VIDEO_FW_FILES))
+	$(DSP_FW_GIT) checkout -q $(DSP_FW_REV)
 	rm -rf $(DSP_OVERLAY)
-	mkdir -p $(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR)
+	mkdir -p $(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR) $(DSP_OVERLAY)/lib/firmware/qcom/vpu
 	cp $(DSP_OUT)/linux-firmware/LICENSE.qcom $(DSP_OVERLAY)/lib/firmware/
 	cp $(DSP_OUT)/linux-firmware/qcom/NOTICE.txt $(DSP_OVERLAY)/lib/firmware/qcom/
 	cd $(DSP_OUT)/linux-firmware/$(DSP_FW_SRC) && \
 		cp $(DSP_FW_FILES) $(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR)/
+	for f in $(VIDEO_FW_FILES); do \
+		cp $(DSP_OUT)/linux-firmware/$$f $(DSP_OVERLAY)/lib/firmware/$$f || exit 1; \
+	done
 	cd $(DSP_OVERLAY) && sha256sum --quiet -c $(DSP_FW_SHA256)
 	@[ $$(cd $(DSP_OVERLAY) && find . -type f | wc -l) -eq $$(wc -l < $(DSP_FW_SHA256)) ] || \
 		{ echo "ERROR: $(DSP_OVERLAY) and $(DSP_FW_SHA256) list different files"; exit 1; }
