@@ -18,7 +18,8 @@
 #               initramfs), flashed to efi
 #
 # The initramfs carries the ADSP and CDSP firmware from linux-firmware, which
-# Linux starts through the OP-TEE PAS service (dsp-firmware).
+# Linux starts through the OP-TEE PAS service, and the FastRPC runtime the
+# DSPs load their user processes from (dsp-firmware).
 #
 # XBL authenticates the TZ image with the QTI authenticator even when secure
 # boot is disabled, so a qtestsign signature is not accepted for tz.mbn.
@@ -136,8 +137,14 @@ BR2_PACKAGE_KVMTOOL             = y
 BR2_PACKAGE_KVM_UNIT_TESTS_EXT  = y
 BR2_PACKAGE_KVM_GUEST_EXT       = y
 BR2_PACKAGE_SOCAT               = y
-# The DSP firmware (dsp-firmware).
-BR2_ROOTFS_OVERLAY              = $(DSP_OVERLAY)
+# DSP userspace: qrtr (libqrtr, qrtr-ns), tqftpserv and fastrpc (the rpcd
+# daemons, fastrpc_test and its libraries). Their init scripts come from
+# qcom/overlay and kodiak/overlay; the DSP firmware and the FastRPC runtime
+# from the dsp-firmware target.
+BR2_PACKAGE_QRTR_EXT            = y
+BR2_PACKAGE_TQFTPSERV_EXT       = y
+BR2_PACKAGE_FASTRPC_EXT         = y
+BR2_ROOTFS_OVERLAY              = $(CURDIR)/qcom/overlay $(CURDIR)/kodiak/overlay $(DSP_OVERLAY)
 
 ################################################################################
 # Paths to repositories: the path= attributes in manifest.git/kodiak.xml.
@@ -399,8 +406,9 @@ tz-qti-sign:
 # when there is no .config. The kernel has no modules, so everything the
 # board needs is built in.
 #
-# LINUX_DSP_CONFIGS: PAS remoteprocs with the OP-TEE backend, GLINK over SMEM
-# and QRTR for the ADSP and the CDSP.
+# LINUX_DSP_CONFIGS: PAS remoteprocs with the OP-TEE backend, GLINK over SMEM,
+# QRTR and FastRPC for the ADSP and the CDSP, and the DMA-BUF heaps FastRPC
+# clients allocate their buffers from.
 # LINUX_TEST_CONFIGS: MEMTEST, the early memory test that memtest=<N> on the
 # kernel command line runs (N patterns over all free memory).
 # LINUX_VIDEO_CONFIGS: the iris video codec driver (V4L2 mem2mem decoder and
@@ -410,7 +418,8 @@ tz-qti-sign:
 LINUX_DSP_CONFIGS = \
 	REMOTEPROC QCOM_Q6V5_PAS QCOM_SYSMON QCOM_PAS QCOM_PAS_TEE QCOM_SCM \
 	RPMSG RPMSG_QCOM_GLINK RPMSG_QCOM_GLINK_SMEM QCOM_SMEM QCOM_SMP2P \
-	QCOM_IPCC QCOM_AOSS_QMP QCOM_RPMHPD QRTR QRTR_SMD QCOM_PD_MAPPER
+	QCOM_IPCC QCOM_AOSS_QMP QCOM_RPMHPD QRTR QRTR_SMD QCOM_PD_MAPPER \
+	QCOM_FASTRPC CMA DMA_CMA DMABUF_HEAPS DMABUF_HEAPS_SYSTEM DMABUF_HEAPS_CMA
 LINUX_TEST_CONFIGS = MEMTEST
 LINUX_VIDEO_CONFIGS = MEDIA_SUPPORT VIDEO_DEV VIDEO_QCOM_IRIS
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
@@ -466,6 +475,9 @@ linux: linux-patches | $(KODIAK_OUT)
 	grep -q -- '-$(BUILD_ID)$$' $(LINUX_PATH)/include/config/kernel.release || \
 		{ echo "ERROR: the kernel release lacks $(BUILD_ID)"; exit 1; }
 	cp $(LINUX_PATH)/arch/arm64/boot/dts/qcom/$(LINUX_DT).dtb $(LINUX_DTB)
+	@# The FastRPC runtime is picked by the DT model (see dsp-firmware).
+	$(LINUX_PATH)/scripts/dtc/dtc -q -I dtb -O dts $(LINUX_DTB) | \
+		grep -qF 'model = "$(DSP_DT_MODEL)";'
 
 linux-clean:
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) clean
@@ -482,10 +494,17 @@ linux-clean:
 #   /lib/firmware/qcom/vpu/      the video codec firmware (VIDEO_FW_FILES,
 #                                VIDEO.VPU.2.0-00055-PROD-1), which iris loads
 #                                on the first open of a video node
+#   /usr/share/qcom/             the FastRPC DSP runtime (fastrpc_shell_N,
+#                                skels) and the conf.d yaml that maps the DT
+#                                model to it
 # linux-firmware ships the files in qcom/qcm6490/ and its WHENCE links them
 # into qcom/qcs6490/; DSP_FW_REV has ADSP.HT.5.5.c8-00246-KODIAK-1 and
-# CDSP.HT.2.5.c3-00130-KODIAK-1. kodiak/dsp-firmware.sha256 holds the SHA-256
-# of every staged file, checked after staging.
+# CDSP.HT.2.5.c3-00130-KODIAK-1. A DSP only loads a fastrpc_shell or skel
+# whose segment hashes its signed image carries, so the runtime is the
+# dsp-binaries RB3gen2 runtime of those two builds (DSP_BIN_BUILDS), checked
+# against the images by qcom/scripts/dsp-runtime-check.py.
+# kodiak/dsp-firmware.sha256 holds the SHA-256 of every staged file, checked
+# after staging.
 ################################################################################
 # GitLab serves partial clones; git.kernel.org sends the whole tree.
 DSP_FW_REPO  ?= https://gitlab.com/kernel-firmware/linux-firmware.git
@@ -495,9 +514,19 @@ DSP_FW_DIR    = qcom/qcs6490
 DSP_FW_FILES  = adsp.mbn adspr.jsn adsps.jsn adspua.jsn battmgr.jsn cdsp.mbn cdspr.jsn
 VIDEO_FW_FILES = qcom/vpu/vpu20_p1.mbn
 DSP_FW_SHA256 = $(CURDIR)/kodiak/dsp-firmware.sha256
+DSP_BIN_REPO ?= https://github.com/linux-msm/dsp-binaries.git
+DSP_BIN_TAG  ?= 20260916
+DSP_BIN_BOARD = qcm6490/Thundercomm/RB3gen2
+# <runtime directory>:<build>, one per DSP
+DSP_BIN_BUILDS = adsp:ADSP.HT.5.5.c8-00246-KODIAK-1 cdsp:CDSP.HT.2.5.c3-00130-KODIAK-1
+DSP_BIN_CONF  = hexagon-dsp-binaries-thundercomm-rb3gen2.yaml
+DSP_DT_MODEL  = Qualcomm Technologies, Inc. Robotics RB3gen2
+# <firmware>:<runtime directory>, one per remoteproc
+DSP_PAIRS     = adsp.mbn:adsp cdsp.mbn:cdsp
 DSP_OUT       = $(KODIAK_BLOBS)/dsp
 DSP_OVERLAY   = $(DSP_OUT)/overlay
 DSP_FW_GIT    = git -C $(DSP_OUT)/linux-firmware
+DSP_BIN_GIT   = git -C $(DSP_OUT)/dsp-binaries
 
 .PHONY: dsp-firmware dsp-firmware-clean
 
@@ -513,8 +542,16 @@ dsp-firmware:
 	$(DSP_FW_GIT) sparse-checkout set --no-cone /LICENSE.qcom /qcom/NOTICE.txt \
 		$(addprefix /$(DSP_FW_SRC)/,$(DSP_FW_FILES)) $(addprefix /,$(VIDEO_FW_FILES))
 	$(DSP_FW_GIT) checkout -q $(DSP_FW_REV)
+	[ "$$($(DSP_BIN_GIT) describe --tags --exact-match 2>/dev/null)" = $(DSP_BIN_TAG) ] || { \
+		rm -rf $(DSP_OUT)/dsp-binaries && \
+		git clone -q --depth=1 --filter=blob:none --no-checkout --branch $(DSP_BIN_TAG) \
+			$(DSP_BIN_REPO) $(DSP_OUT)/dsp-binaries && \
+		$(DSP_BIN_GIT) sparse-checkout set conf.d scripts \
+			$(foreach b,$(DSP_BIN_BUILDS),$(DSP_BIN_BOARD)/$(lastword $(subst :, ,$(b)))) && \
+		$(DSP_BIN_GIT) checkout -q; }
 	rm -rf $(DSP_OVERLAY)
-	mkdir -p $(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR) $(DSP_OVERLAY)/lib/firmware/qcom/vpu
+	mkdir -p $(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR) $(DSP_OVERLAY)/lib/firmware/qcom/vpu \
+		$(DSP_OVERLAY)/usr/share/qcom/conf.d
 	cp $(DSP_OUT)/linux-firmware/LICENSE.qcom $(DSP_OVERLAY)/lib/firmware/
 	cp $(DSP_OUT)/linux-firmware/qcom/NOTICE.txt $(DSP_OVERLAY)/lib/firmware/qcom/
 	cd $(DSP_OUT)/linux-firmware/$(DSP_FW_SRC) && \
@@ -522,6 +559,18 @@ dsp-firmware:
 	for f in $(VIDEO_FW_FILES); do \
 		cp $(DSP_OUT)/linux-firmware/$$f $(DSP_OVERLAY)/lib/firmware/$$f || exit 1; \
 	done
+	for b in $(DSP_BIN_BUILDS); do \
+		printf 'Install: %s\t%s\t%s\n' $(DSP_BIN_BOARD) $${b%%:*} $${b#*:}; \
+	done > $(DSP_OUT)/kodiak-config.txt
+	cd $(DSP_OUT)/dsp-binaries && \
+		./scripts/install.sh $(DSP_OUT)/kodiak-config.txt $(DSP_OVERLAY)/usr/share/qcom
+	install -m 0644 $(DSP_OUT)/dsp-binaries/conf.d/$(DSP_BIN_CONF) \
+		$(DSP_OVERLAY)/usr/share/qcom/conf.d/
+	grep -qx '  $(DSP_DT_MODEL):' $(DSP_OVERLAY)/usr/share/qcom/conf.d/$(DSP_BIN_CONF)
+	grep -qx '    DSP_LIBRARY_PATH: $(DSP_BIN_BOARD)/dsp' \
+		$(DSP_OVERLAY)/usr/share/qcom/conf.d/$(DSP_BIN_CONF)
+	python3 $(CURDIR)/qcom/scripts/dsp-runtime-check.py $(DSP_OUT)/dsp-binaries \
+		$(foreach p,$(DSP_PAIRS),$(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR)/$(word 1,$(subst :, ,$(p))):$(DSP_OVERLAY)/usr/share/qcom/$(DSP_BIN_BOARD)/dsp/$(word 2,$(subst :, ,$(p))))
 	cd $(DSP_OVERLAY) && sha256sum --quiet -c $(DSP_FW_SHA256)
 	@[ $$(cd $(DSP_OVERLAY) && find . -type f | wc -l) -eq $$(wc -l < $(DSP_FW_SHA256)) ] || \
 		{ echo "ERROR: $(DSP_OVERLAY) and $(DSP_FW_SHA256) list different files"; exit 1; }

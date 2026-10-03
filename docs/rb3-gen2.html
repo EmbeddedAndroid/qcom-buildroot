@@ -22,7 +22,8 @@
     <li>the open boot chain from upstream TF-A and OP-TEE, which support Kodiak
       and the RB3 Gen 2, and U-Boot;</li>
     <li>a Linux kernel with a Buildroot initramfs, packed in a UKI;</li>
-    <li>the ADSP and CDSP firmware from linux-firmware, in the initramfs.</li>
+    <li>the ADSP and CDSP firmware from linux-firmware and the FastRPC userspace
+      and DSP runtime, in the initramfs.</li>
   </ul>
 
   <table class="rtd-table">
@@ -89,8 +90,25 @@
     them from linux-firmware at a pinned revision (<code>DSP_FW_REV</code>) into
     <code>kodiak/blobs/dsp/</code> and checks every staged file against
     <code>kodiak/dsp-firmware.sha256</code>. Linux starts both DSPs at boot
-    through the OP-TEE PAS pseudo-TA. The rootfs has no FastRPC or audio
-    userspace.
+    through the OP-TEE PAS pseudo-TA. The rootfs has no audio userspace.
+  </p>
+  <p>
+    FastRPC: the kernel driver (<code>QCOM_FASTRPC</code>, with the DMA-BUF
+    heaps its clients allocate from), the userspace from
+    <a href="https://github.com/qualcomm/fastrpc">fastrpc</a> (the
+    <code>adsprpcd</code> and <code>cdsprpcd</code> daemons, started by
+    <code>/etc/init.d/S60fastrpc</code> once the device nodes appear, and
+    <code>fastrpc_test</code>), qrtr and tqftpserv. A DSP only loads the FastRPC
+    shell and skels whose hashes its signed image carries, so the DSP runtime
+    in <code>/usr/share/qcom/qcm6490/Thundercomm/RB3gen2/dsp/</code> is the
+    <a href="https://github.com/linux-msm/dsp-binaries">dsp-binaries</a>
+    runtime of the two firmware builds above (tag <code>DSP_BIN_TAG</code>);
+    <code>dsp-firmware</code> checks the pairing with
+    <code>qcom/scripts/dsp-runtime-check.py</code> and installs the conf.d
+    entry that maps the device tree model to it. Check on the board:
+    <code>fastrpc_test -d 3 -U 0</code> (CDSP, signed PD),
+    <code>fastrpc_test -d 3 -U 1</code> (unsigned PD) and
+    <code>fastrpc_test -d 0 -U 0</code> (ADSP).
   </p>
 
   <h2 id="video">Video codec</h2>
@@ -139,13 +157,13 @@
         again, and the video core enabled at EL2 (see
         <a href="#video">Video codec</a>).</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST, the PAS
-        remote processors with the OP-TEE backend, iris, and no modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
+        remote processors with the OP-TEE backend, FastRPC, iris, and no modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
         Kodiak EL2 overlay)</td></tr>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>)</td>
         <td>The rootfs, a gzip-compressed cpio used as the initramfs: xtest,
         stress-ng, kvmtool, the KVM unit tests, a KVM test guest, the DSP
-        firmware, the video codec firmware, FFmpeg and the video-codec test
-        streams</td></tr>
+        firmware, the FastRPC userspace and DSP runtime, the video codec
+        firmware, FFmpeg and the video-codec test streams</td></tr>
   </table>
 
   <h2 id="build">Build</h2>
