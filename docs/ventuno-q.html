@@ -157,7 +157,10 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
     stream the video core fetches its firmware with, as no hypervisor does at
     EL2, and the EL2 overlay change that enables iris with that stream. The
     patches are on their way upstream or in the qualcomm-linux kernel, except
-    the one that creates the firmware stream device.
+    the one that creates the firmware stream device. It also carries the
+    rpmhpd change that lets the NSP0 and NSP1 votes through before
+    <code>sync_state</code> (the IQ-9075 EVK NSPs crash without it); the
+    CDSP is on NSP0.
   </p>
 
   <h3 id="boot-cpu">Boot CPU</h3>

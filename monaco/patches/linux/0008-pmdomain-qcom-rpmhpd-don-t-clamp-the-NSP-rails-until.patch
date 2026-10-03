@@ -1,0 +1,90 @@
+From 810368fffe4a8e2a5664d74b03ff4945da74dd83 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Sat, 3 Oct 2026 12:44:38 -0400
+Subject: [PATCH] pmdomain: qcom: rpmhpd: don't clamp the NSP rails until
+ sync_state
+
+Until sync_state, rpmhpd votes the highest level of every rail a
+consumer has turned on, and keeps that vote after the consumer turns
+the rail off. On SA8775P the CDSP and CDSP1 remoteprocs vote for NSP0
+and NSP1 while their DSPs boot and drop the vote at handover; with both
+drivers built in they boot at 2 s and the apps vote stays at the
+highest level until sync_state at about 12 s. The NSPs stop answering
+glink in that window (channel opens time out, "failed to create
+endpoint") and both report a fatal error from sleep_statsi.c:600 when
+sync_state finally drops the vote:
+
+  remoteproc remoteproc2: crash detected in cdsp: type fatal error
+  remoteproc remoteproc3: crash detected in cdsp1: type fatal error
+
+The clamp keeps rails up for hardware the bootloader left running until
+its driver probes. No such hardware uses the NSP rails: only the NSPs
+do, and their firmware votes for its own rail once running. The problem
+is hidden when the remoteproc drivers probe after rpmhpd's sync_state,
+as with modules loaded from the root filesystem.
+
+Let the NSP0 and NSP1 votes through before sync_state.
+
+Fixes: 3a39049f88e4 ("soc: qcom: rpmhpd: Use highest corner until sync_state")
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ drivers/pmdomain/qcom/rpmhpd.c | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/pmdomain/qcom/rpmhpd.c b/drivers/pmdomain/qcom/rpmhpd.c
+index fa8fed5bd3e5..2ae72783a776 100644
+--- a/drivers/pmdomain/qcom/rpmhpd.c
++++ b/drivers/pmdomain/qcom/rpmhpd.c
+@@ -41,6 +41,8 @@
+  * @addr:		Resource address as looped up using resource name from
+  *			cmd-db
+  * @state_synced:	Indicator that sync_state has been invoked for the rpmhpd resource
++ * @skip_sync_state_clamp: Pass votes through before sync_state instead of
++ *			holding the rail at its highest level
+  */
+ struct rpmhpd {
+ 	struct device	*dev;
+@@ -57,6 +59,7 @@ struct rpmhpd {
+ 	const char	*res_name;
+ 	u32		addr;
+ 	bool		state_synced;
++	bool		skip_sync_state_clamp;
+ };
+ 
+ struct rpmhpd_desc {
+@@ -208,14 +211,22 @@ static struct rpmhpd nsp = {
+ 	.res_name = "nsp.lvl",
+ };
+ 
++/*
++ * The NSP rails feed only the NSPs, which their remoteproc drivers boot and
++ * which then vote for their own rail; no bootloader state depends on them.
++ * An apps vote held at the highest level until sync_state makes the NSP
++ * firmware crash when sync_state drops it.
++ */
+ static struct rpmhpd nsp0 = {
+ 	.pd = { .name = "nsp0", },
+ 	.res_name = "nsp0.lvl",
++	.skip_sync_state_clamp = true,
+ };
+ 
+ static struct rpmhpd nsp1 = {
+ 	.pd = { .name = "nsp1", },
+ 	.res_name = "nsp1.lvl",
++	.skip_sync_state_clamp = true,
+ };
+ 
+ static struct rpmhpd nsp2 = {
+@@ -1006,7 +1017,7 @@ static int rpmhpd_aggregate_corner(struct rpmhpd *pd, unsigned int corner)
+ 	unsigned int peer_active_corner = 0, peer_sleep_corner = 0;
+ 	unsigned int peer_enabled_corner;
+ 
+-	if (pd->state_synced) {
++	if (pd->state_synced || pd->skip_sync_state_clamp) {
+ 		to_active_sleep(pd, corner, &this_active_corner, &this_sleep_corner);
+ 	} else {
+ 		/* Clamp to highest corner if sync_state hasn't happened */
+-- 
+2.47.3
+
