@@ -48,7 +48,7 @@
 #
 # Component targets: optee-os, u-boot, tfa, fip, linux-patches, linux,
 # linux-defconfig, buildroot, dsp-firmware, qtestsign-fetch, qtiseclib-fetch,
-# and the matching *-clean targets.
+# video-streams, and the matching *-clean targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
@@ -71,6 +71,8 @@
 #                     flash-lava: 1 interactive, 0 flash-only (default: ask
 #                     on a terminal, else flash-only)
 #   FLASH_LAVA_JOB    the LAVA job definition (default: kodiak/lava/flash-lava.yaml)
+#   QCOM_VIDEO_TEST   y to put FFmpeg and the video-codec test streams in
+#                     the rootfs (default: y; see qcom/video/video.mk)
 #   tz-qti-sign:      SECTOOLS, QTI_SIGN_DIR, SECURITY_PROFILE,
 #                     CASS_CAPABILITY, QTI_SIGN_SERVER_URL,
 #                     QTI_SIGN_SERVER_PORT (see the tz-qti-sign section)
@@ -145,6 +147,7 @@ TF_A_PATH ?= $(ROOT)/arm-trusted-firmware
 
 include common.mk
 include toolchain.mk
+include qcom/video/video.mk
 
 # common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
 # which turns the Kodiak target.mk's '+= qcom_pas/...' into a no-op. Append
@@ -205,12 +208,13 @@ help:
 	@echo "  clean          clean all components and kodiak/output/"
 	@echo ""
 	@echo "Component targets: optee-os u-boot tfa fip linux-patches linux"
-	@echo "  linux-defconfig buildroot dsp-firmware qtestsign-fetch qtiseclib-fetch,"
+	@echo "  linux-defconfig buildroot dsp-firmware qtestsign-fetch qtiseclib-fetch"
+	@echo "  video-streams,"
 	@echo "  and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TF_A_FLAGS TF_A_DEBUG QTISECLIB DSP_FW_REPO DSP_FW_REV"
 	@echo "  U_BOOT_CONFIGS U_BOOT_DEVICE_TREE LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE"
-	@echo "  QDL QDL_FLAGS FLASH_LAVA_CONNECT FLASH_LAVA_JOB;"
+	@echo "  QDL QDL_FLAGS FLASH_LAVA_CONNECT FLASH_LAVA_JOB QCOM_VIDEO_TEST;"
 	@echo "  tz-qti-sign: SECTOOLS QTI_SIGN_DIR SECURITY_PROFILE CASS_CAPABILITY"
 	@echo "  QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT"
 

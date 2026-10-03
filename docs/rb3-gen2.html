@@ -107,6 +107,15 @@
     core, and the last patch in <code>kodiak/patches/linux/</code> enables it
     with that stream (<code>video-firmware</code>).
   </p>
+  <p>
+    The rootfs also carries FFmpeg and the reference streams of the
+    <code>video-codec</code> test (see
+    <a href="build-system.html#video-test">Video codec test</a>). Its board
+    facts for the RB3 Gen 2: device <code>aa00000.video-codec</code>, driver
+    <code>qcom-iris</code>, firmware
+    <code>/lib/firmware/qcom/vpu/vpu20_p1.mbn</code>, decoders
+    <code>h264 hevc vp9</code>, encoders <code>h264 hevc</code>.
+  </p>
 
   <h2 id="sources">Sources</h2>
   <table class="rtd-table">
@@ -135,7 +144,8 @@
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>)</td>
         <td>The rootfs, a gzip-compressed cpio used as the initramfs: xtest,
         stress-ng, kvmtool, the KVM unit tests, a KVM test guest, the DSP
-        firmware and the video codec firmware</td></tr>
+        firmware, the video codec firmware, FFmpeg and the video-codec test
+        streams</td></tr>
   </table>
 
   <h2 id="build">Build</h2>
