@@ -64,7 +64,7 @@
     <tr><td>TF-A</td><td>qualcomm-linux/trusted-firmware-a, <code>qcom-next</code></td><td><code>PLAT=lemans_evk SPD=opteed</code>, BL31 only</td></tr>
     <tr><td>OP-TEE</td><td>OP-TEE/optee_os, <code>master</code></td><td><code>PLATFORM=qcom-lemans</code>, with the <code>qcom_pas</code> early TA</td></tr>
     <tr><td>U-Boot</td><td>qualcomm-linux/u-boot, <code>qcom-next</code></td><td>SPL and proper, plus the overlays in <code>lemans/patches/u-boot/</code></td></tr>
-    <tr><td>Linux</td><td>qualcomm-linux/kernel-topics, <code>tech/security/optee</code></td><td>arm64 <code>defconfig</code> with OP-TEE, PAS, FastRPC, no SMCCC SoC ID device and no modules; <code>lemans-evk-el2.dtb</code></td></tr>
+    <tr><td>Linux</td><td>qualcomm-linux/kernel-topics, <code>tech/security/optee</code></td><td>arm64 <code>defconfig</code> with OP-TEE, PAS, FastRPC, no SMCCC SoC ID device and no modules; <code>lemans-evk-el2.dtb</code>; plus the overlays in <code>lemans/patches/linux/</code></td></tr>
   </table>
   <p>Each tree is pinned to a revision in the manifest.</p>
 
@@ -113,6 +113,15 @@ make flash-kernel   # LUN 0: efi.bin</pre>
     dsp-binaries conf.d entry for the EVK device tree model names.
     <code>fastrpc_test -d 3</code> and <code>-d 4</code> call the two NSPs (CDSP
     and CDSP1), <code>-U 1</code> in an unsigned PD.
+  </p>
+  <p>
+    The NSPs boot about 2 s after the kernel, long before rpmhpd's
+    <code>sync_state</code>. Until then rpmhpd holds every rail a consumer has
+    voted for at its highest level; the NSPs stop answering glink while their
+    rail is held there and crash with a fatal error from
+    <code>sleep_statsi.c</code> when <code>sync_state</code> drops it. The
+    overlay <code>0002-pmdomain-qcom-rpmhpd-don-t-clamp-the-NSP-rails-until.patch</code>
+    lets the NSP rail votes through before <code>sync_state</code>.
   </p>
   <p>
     It also carries FFmpeg and the reference streams of the
