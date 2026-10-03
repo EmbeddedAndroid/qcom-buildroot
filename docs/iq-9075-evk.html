@@ -103,6 +103,18 @@ make flash-kernel   # LUN 0: efi.bin</pre>
     video encode and decode round trip and a CPU stress test.
   </p>
   <p>
+    FastRPC needs the DSP runtime the DSPs load their user processes from:
+    <code>linux-firmware</code> installs the
+    <a href="https://github.com/linux-msm/dsp-binaries">dsp-binaries</a>
+    SA8775P-RIDE runtime of the same build as the DSP images
+    (<code>DSP_BIN_BUILD</code>, checked against them with
+    <code>qcom/scripts/dsp-runtime-check.py</code>) under
+    <code>/usr/share/qcom/sa8775p/Qualcomm/IQ9075-EVK/dsp/</code>, the path the
+    dsp-binaries conf.d entry for the EVK device tree model names.
+    <code>fastrpc_test -d 3</code> and <code>-d 4</code> call the two NSPs (CDSP
+    and CDSP1), <code>-U 1</code> in an unsigned PD.
+  </p>
+  <p>
     It also carries FFmpeg and the reference streams of the
     <code>video-codec</code> test (see
     <a href="build-system.html#video-test">Video codec test</a>). The test's

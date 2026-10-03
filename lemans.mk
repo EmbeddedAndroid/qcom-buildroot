@@ -109,9 +109,8 @@ BR2_PACKAGE_LIBOPENSSL_BIN ?= y
 # busybox 'yes' busy-loop if this is ever disabled.
 BR2_PACKAGE_STRESS_NG ?= y
 
-# Qualcomm FastRPC test — validates the OP-TEE PAS coprocessor reset sequence.
-# NOTE: upstream ships DSP skel stubs for v68/v75 only; the SA8775P CDSP is v73,
-# so the bundled calculator workload may have no matching skel at runtime.
+# Qualcomm FastRPC userspace and fastrpc_test, which validates the OP-TEE PAS
+# coprocessor bring-up. Its v68 test skels also run on the v73 NSPs.
 BR2_PACKAGE_FASTRPC_EXT ?= y
 
 # QRTR userspace (libqrtr + qrtr-ns). qrtr-ns is the QMI name service the DSP
@@ -156,8 +155,8 @@ BR2_PACKAGE_BUSYBOX_WATCHDOG = y
 # OP-TEE OS, TF-A BL31, Linux, U-Boot and OP-TEE are built outside of Buildroot
 BR2_LINUX_KERNEL              = n
 # Overlays: the qrtr-ns and tqftpserv init scripts shared by the Qualcomm
-# boards (qcom/overlay) and lemans/overlay, where the DSP firmware is staged
-# (by fetch-blobs, see below). The kernel is
+# boards (qcom/overlay) and lemans/overlay, where the DSP firmware and the
+# FastRPC runtime are staged (by linux-firmware, see below). The kernel is
 # CONFIG_MODULES=n (see linux-defconfig), so there are no loadable modules to
 # overlay.
 BR2_ROOTFS_OVERLAY            = $(CURDIR)/qcom/overlay $(OVERLAY_DIR)
@@ -1207,11 +1206,13 @@ PTOOL_PLATFORM = iq-9075-evk
 #      out qcom/sa8775p and copy the *.mbn/*.jsn into the overlay.
 #
 #   2. DSP runtime (fastrpc_shell* + skels): the PD runtime FastRPC pushes to
-#      the DSP, plus a conf.d yaml mapping the DT model -> DSP_LIBRARY_PATH.
-#      Sourced from linux-msm/dsp-binaries and installed (pruned to this board)
-#      to /usr/share/qcom/sa8775p/Qualcomm/SA8775P-RIDE/dsp/ + conf.d.  The
-#      upstream conf.d covers "Lemans Ride"/"SA8775P Ride" but not the EVK board
-#      this build targets, so an extra mapping is added from lemans/dsp-conf.d/.
+#      the DSP, plus the conf.d yaml mapping the DT model to DSP_LIBRARY_PATH.
+#      A DSP only loads a fastrpc_shell or skel whose segment hashes its
+#      signed image carries, so the runtime is the linux-msm/dsp-binaries
+#      SA8775P-RIDE runtime of the firmware's own build (DSP_BIN_BUILD),
+#      installed under the IQ9075-EVK path the EVK conf.d entry names
+#      (/usr/share/qcom/sa8775p/Qualcomm/IQ9075-EVK/dsp/) and checked against
+#      the images by qcom/scripts/dsp-runtime-check.py.
 FW_REPO        = https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git
 # Pin the DSP firmware to the linux-firmware revision the meta-qcom BSP ships
 # rather than tracking HEAD, so the staged sa8775p DSP firmware matches the
@@ -1230,9 +1231,16 @@ FW_SOC         = qcom/sa8775p
 FW_VPU         = qcom/vpu
 FW_CLONE_DIR   = $(BLOBS_DIR)/linux-firmware
 DSP_REPO       = https://github.com/linux-msm/dsp-binaries.git
-DSP_TAG        = 20260519
+DSP_TAG        = 20260916
 DSP_CLONE_DIR  = $(BLOBS_DIR)/dsp-binaries
-DSP_BOARD      = SA8775P-RIDE
+# The build of every sa8775p image at FW_SRCREV
+DSP_BIN_BUILD  = DSP.AT.1.0.1-00196-LEMANS-2
+DSP_BIN_SRC    = sa8775p/Qualcomm/SA8775P-RIDE
+DSP_BIN_BOARD  = sa8775p/Qualcomm/IQ9075-EVK
+DSP_BIN_CONF   = hexagon-dsp-binaries-qualcomm-iq9075-evk.yaml
+DSP_DT_MODEL   = Qualcomm Technologies, Inc. Lemans EVK
+# <firmware>:<runtime directory>, one per remoteproc
+DSP_PAIRS      = adsp.mbn:adsp cdsp0.mbn:cdsp cdsp1.mbn:cdsp1 gpdsp0.mbn:gdsp0 gpdsp1.mbn:gdsp1
 OVERLAY_DIR    = $(CURDIR)/lemans/overlay
 FW_DEST_DIR    = $(OVERLAY_DIR)/lib/firmware/$(FW_SOC)
 FW_VPU_DEST    = $(OVERLAY_DIR)/lib/firmware/$(FW_VPU)
@@ -1250,6 +1258,7 @@ buildroot: linux-firmware | $(OVERLAY_DIR)
 # linux-firmware — stage upstream linux-firmware into the buildroot overlay:
 #   /lib/firmware/$(FW_SOC)  — per-SoC DSP/remoteproc + QUP blobs
 #   /lib/firmware/$(FW_VPU)  — venus/iris video-codec firmware (vpu*.mbn)
+#   /usr/share/qcom          the FastRPC DSP runtime of those DSP images
 # Standalone target, independent of fetch-blobs; 'buildroot' (and hence 'efi')
 # depends on it so the firmware is baked into the rootfs/UKI regardless of when
 # (or whether) fetch-blobs runs.
@@ -1276,11 +1285,31 @@ linux-firmware: | $(OVERLAY_DIR)
 	@mkdir -p $(FW_VPU_DEST)
 	@cp -a $(FW_CLONE_DIR)/$(FW_VPU)/. $(FW_VPU_DEST)/
 	@echo "linux-firmware staged in $(FW_DEST_DIR)/ and $(FW_VPU_DEST)/ (pinned $(FW_SRCREV))"
+	[ "$$(git -C $(DSP_CLONE_DIR) describe --tags --exact-match 2>/dev/null)" = $(DSP_TAG) ] || { \
+		rm -rf $(DSP_CLONE_DIR) && \
+		git clone -q --depth=1 --filter=blob:none --no-checkout --branch $(DSP_TAG) \
+			$(DSP_REPO) $(DSP_CLONE_DIR) && \
+		git -C $(DSP_CLONE_DIR) sparse-checkout set conf.d scripts \
+			$(foreach p,$(DSP_PAIRS),$(DSP_BIN_SRC)/$(lastword $(subst :, ,$(p)))-$(DSP_BIN_BUILD)) && \
+		git -C $(DSP_CLONE_DIR) checkout -q; }
+	rm -rf $(DSP_SHARE_DIR)
+	mkdir -p $(DSP_SHARE_DIR)/conf.d
+	for p in $(DSP_PAIRS); do \
+		d=$${p#*:}; \
+		printf 'Install: %s\t%s\t%s\n' $(DSP_BIN_SRC) $$d $$d-$(DSP_BIN_BUILD); \
+		printf 'Link: %s\t%s\n' $(DSP_BIN_SRC)/dsp/$$d $(DSP_BIN_BOARD)/dsp/$$d; \
+	done > $(BLOBS_DIR)/lemans-dsp-config.txt
+	cd $(DSP_CLONE_DIR) && ./scripts/install.sh $(BLOBS_DIR)/lemans-dsp-config.txt $(DSP_SHARE_DIR)
+	install -m 0644 $(DSP_CLONE_DIR)/conf.d/$(DSP_BIN_CONF) $(DSP_SHARE_DIR)/conf.d/
+	grep -qx '  $(DSP_DT_MODEL):' $(DSP_SHARE_DIR)/conf.d/$(DSP_BIN_CONF)
+	grep -qx '    DSP_LIBRARY_PATH: $(DSP_BIN_BOARD)/dsp' $(DSP_SHARE_DIR)/conf.d/$(DSP_BIN_CONF)
+	python3 $(CURDIR)/qcom/scripts/dsp-runtime-check.py $(DSP_CLONE_DIR) \
+		$(foreach p,$(DSP_PAIRS),$(FW_DEST_DIR)/$(word 1,$(subst :, ,$(p))):$(DSP_SHARE_DIR)/$(DSP_BIN_BOARD)/dsp/$(word 2,$(subst :, ,$(p))))
 
 # linux-firmware-clean — remove the cloned linux-firmware repo and the firmware
 # staged into the buildroot overlay (per-SoC + video-codec dirs).
 linux-firmware-clean:
-	rm -rf $(FW_CLONE_DIR) $(FW_DEST_DIR) $(FW_VPU_DEST)
+	rm -rf $(FW_CLONE_DIR) $(FW_DEST_DIR) $(FW_VPU_DEST) $(DSP_CLONE_DIR) $(DSP_SHARE_DIR)
 
 fetch-blobs: $(BLOBS_STAMP)
 
@@ -1348,25 +1377,9 @@ $(BLOBS_STAMP):
 	@# available and is not needed for UKI-based boot (DTB is embedded in uki.efi).
 	@# Removing its entries prevents QDL from failing on a missing file.
 	@sed -i '/filename="dtb\.bin"/d' $(BLOBS_DIR)/rawprogram4.xml
-	@# Remoteproc/QUP firmware (qcom/sa8775p) is staged by the standalone
-	@# 'linux-firmware' target (a prerequisite of buildroot), not here.
-	@# ── DSP runtime (fastrpc_shell + skels) → rootfs overlay ────────────────
-	@# Clone linux-msm/dsp-binaries at the pinned tag and install ONLY this
-	@# board's files (via the repo's install.sh, which maps the versioned source
-	@# dirs into dsp/{adsp,cdsp,...} and pulls licenses from WHENCE), plus the
-	@# conf.d yamls that map the DT model -> DSP_LIBRARY_PATH.
-	@if [ ! -d $(DSP_CLONE_DIR)/.git ]; then \
-		echo "Cloning dsp-binaries ($(DSP_TAG))..."; \
-		git clone --depth=1 --branch $(DSP_TAG) $(DSP_REPO) $(DSP_CLONE_DIR); \
-	fi
-	@mkdir -p $(DSP_SHARE_DIR)/conf.d
-	@cd $(DSP_CLONE_DIR) && \
-		grep '^Install:.*$(DSP_BOARD)' config.txt > .board-config.txt && \
-		./scripts/install.sh .board-config.txt $(DSP_SHARE_DIR)
-	@install -m 0644 $(DSP_CLONE_DIR)/conf.d/*.yaml $(DSP_SHARE_DIR)/conf.d/
-	@# Add the EVK board mapping the upstream conf.d does not cover.
-	@install -m 0644 $(CURDIR)/lemans/dsp-conf.d/lemans-evk.yaml $(DSP_SHARE_DIR)/conf.d/
-	@echo "DSP runtime staged in $(DSP_SHARE_DIR)/ (board: $(DSP_BOARD))"
+	@# Remoteproc/QUP firmware (qcom/sa8775p) and the FastRPC DSP runtime are
+	@# staged by the standalone 'linux-firmware' target (a prerequisite of
+	@# buildroot), not here.
 	@touch $(BLOBS_STAMP)
 	@echo "Blobs ready in $(BLOBS_DIR)/"
 

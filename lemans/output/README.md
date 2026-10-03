@@ -14,29 +14,28 @@ from github.com/qualcomm/fastrpc) used to validate that OP-TEE performed the PAS
 (Peripheral Authentication Service) load/reset of the CDSP correctly.
 
 Firmware is provisioned into a `BR2_ROOTFS_OVERLAY` overlay (`lemans/overlay/`)
-by **`make -f lemans.mk fetch-blobs`, which must run before building the
-rootfs**. Following the meta-qcom layout, two sets are staged:
+by `make -f lemans.mk linux-firmware`, a prerequisite of `buildroot`.
+Following the meta-qcom layout, two sets are staged:
 
 1. **Remoteproc images** (`cdsp0/cdsp1/adsp/gpdsp*.mbn`) from upstream
    linux-firmware → `/lib/firmware/qcom/sa8775p/`, matching the DTS
    `firmware-name`. The kernel loading these triggers the OP-TEE PAS path.
-2. **DSP runtime** (`fastrpc_shell*` + skels) from `linux-msm/dsp-binaries`
-   (pruned to SA8775P-RIDE) → `/usr/share/qcom/sa8775p/Qualcomm/SA8775P-RIDE/dsp/`,
-   plus `conf.d/*.yaml` mapping the DT model → `DSP_LIBRARY_PATH`. Upstream
-   conf.d covers "Lemans Ride"/"SA8775P Ride" but not the EVK board, so
-   `lemans/dsp-conf.d/lemans-evk.yaml` adds the EVK mapping.
+2. **DSP runtime** (`fastrpc_shell*` + skels) from `linux-msm/dsp-binaries`:
+   the SA8775P-RIDE runtime of the same DSP build as the images
+   (`DSP_BIN_BUILD`), installed under the path the IQ9075-EVK conf.d entry
+   maps the "Qualcomm Technologies, Inc. Lemans EVK" DT model to,
+   `/usr/share/qcom/sa8775p/Qualcomm/IQ9075-EVK/dsp/`. A DSP refuses a shell
+   or skel whose hash its signed image does not carry;
+   `qcom/scripts/dsp-runtime-check.py` checks the pairing at build time.
 
 Prerequisites:
 
 - `CONFIG_QCOM_FASTRPC` and the remoteproc/rpmsg chain are enabled by
   `linux-defconfig` (built-in).
 - The FastRPC runtime matches the board via the DT `model` string. Verify it
-  matches a conf.d key: `cat /proc/device-tree/model`.
+  matches the conf.d key: `cat /proc/device-tree/model`.
 
-On the target, the CDSP is brought up via remoteproc → OP-TEE PAS, then run
-`fastrpc_test` (see github.com/qualcomm/fastrpc test/README.md for options).
-
-> **Caveat:** upstream fastrpc ships DSP skeleton stubs for **v68/v75** only. The
-> SA8775P CDSP is **v73**, so the bundled calculator workload may have no matching
-> skel at runtime. The binary, libraries and kernel/firmware plumbing are in
-> place; a v73 skel would be needed to exercise the calculator test on lemans.
+On the target, the CDSPs are brought up via remoteproc → OP-TEE PAS, then run
+`fastrpc_test -d 3` (CDSP) or `fastrpc_test -d 4` (CDSP1), `-U 0` for a
+signed and `-U 1` for an unsigned PD (see github.com/qualcomm/fastrpc
+test/README.md). Its v68 test skels also run on the v73 NSPs.
