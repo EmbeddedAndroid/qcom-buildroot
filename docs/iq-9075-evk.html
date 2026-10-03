@@ -102,6 +102,17 @@ make flash-kernel   # LUN 0: efi.bin</pre>
     CDSP FastRPC tests (the DSPs are started through the OP-TEE PAS service), a
     video encode and decode round trip and a CPU stress test.
   </p>
+  <p>
+    It also carries FFmpeg and the reference streams of the
+    <code>video-codec</code> test (see
+    <a href="build-system.html#video-test">Video codec test</a>). The test's
+    board facts for the IQ-9075 EVK: device <code>aa00000.video-codec</code>,
+    driver <code>qcom-iris</code>, firmware
+    <code>/lib/firmware/qcom/vpu/vpu30_p4_s6_16mb.mbn</code> (the
+    <code>firmware-name</code> of the EVK device tree, staged with the rest of
+    <code>qcom/vpu</code> by <code>linux-firmware</code>), decoders
+    <code>h264 hevc vp9</code>, encoders <code>h264 hevc</code>.
+  </p>
 
 </main>
 <script src="_rtd.js"></script>

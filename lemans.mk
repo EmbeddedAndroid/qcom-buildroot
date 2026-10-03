@@ -57,6 +57,8 @@
 #   QTESTSIGN_PATH        Path to qtestsign checkout (default: $(ROOT)/qtestsign)
 #   UFS_PROVISION_XML     UFS provision layout for flash-ufs-provision
 #                         (default: provision_1_2.xml — grows HLOS LUN 0)
+#   QCOM_VIDEO_TEST       y to put FFmpeg and the video-codec test streams in
+#                         the rootfs (default: y; see qcom/video/video.mk)
 ################################################################################
 
 ################################################################################
@@ -239,6 +241,7 @@ BOOTAA64_EFI = $(CURDIR)/lemans/input/bootaa64.efi
 
 include common.mk
 include toolchain.mk
+include qcom/video/video.mk
 
 # common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
 # which turns the platform target.mk's '+= qcom_pas/...' into a no-op. Append
