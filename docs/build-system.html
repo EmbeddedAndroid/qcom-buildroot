@@ -107,7 +107,13 @@ repo sync -j4 --no-clone-bundle</pre>
     <li>Linux is built from the arm64 <code>defconfig</code> with OP-TEE enabled,
       <code>CONFIG_MODULES</code> off (everything the board needs is built in) and
       <code>EFI_ZBOOT</code>, which produces <code>vmlinuz.efi</code>. It runs at EL2:
-      the board DTB is combined with the SoC's EL2 overlay.</li>
+      the board DTB is combined with the SoC's EL2 overlay.
+      <code>ARM_SMCCC_SOC_ID</code> is left out: TF-A answers
+      <code>SMCCC_ARCH_SOC_ID</code>, so that device would take
+      <code>/sys/devices/soc0</code> before the Qualcomm socinfo device, with a
+      <code>jep106:0070:&lt;id&gt;</code> <code>soc_id</code>; the Qualcomm AI
+      Runtime reads <code>soc0</code>'s <code>soc_id</code> as a number and
+      aborts.</li>
     <li>Buildroot builds a small rootfs as a gzip-compressed cpio, with the OP-TEE
       client (<code>tee-supplicant</code>), xtest and the OP-TEE examples. Board files
       come in through <code>BR2_ROOTFS_OVERLAY</code>: <code>qcom/overlay</code>, then

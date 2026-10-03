@@ -514,6 +514,12 @@ tz-qti-sign:
 # LINUX_VIDEO_CONFIGS: the iris video codec driver (V4L2 mem2mem decoder and
 # encoder).
 # linux fails if any of them is not built in.
+# LINUX_OFF_CONFIGS: left out; linux fails if any of them is set.
+#   ARM_SMCCC_SOC_ID: the SMCCC SoC ID device (TF-A answers
+#   SMCCC_ARCH_SOC_ID) registers before the Qualcomm socinfo device and takes
+#   soc0, whose soc_id then reads jep106:0070:<id> instead of the socinfo
+#   number. The Qualcomm AI Runtime reads soc0's soc_id as a number and
+#   aborts; the socinfo device carries the same SoC ID.
 ################################################################################
 LINUX_DSP_CONFIGS = \
 	REMOTEPROC QCOM_Q6V5_PAS QCOM_SYSMON QCOM_PAS QCOM_PAS_TEE QCOM_SCM \
@@ -522,6 +528,7 @@ LINUX_DSP_CONFIGS = \
 	QRTR QRTR_SMD QCOM_PD_MAPPER QCOM_FASTRPC \
 	CMA DMA_CMA DMABUF_HEAPS DMABUF_HEAPS_SYSTEM DMABUF_HEAPS_CMA
 LINUX_TEST_CONFIGS = MEMTEST
+LINUX_OFF_CONFIGS = ARM_SMCCC_SOC_ID
 LINUX_VIDEO_CONFIGS = MEDIA_SUPPORT VIDEO_DEV VIDEO_QCOM_IRIS
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
@@ -562,6 +569,7 @@ linux-defconfig: linux-patches
 		-e KVM \
 		-d LOCALVERSION_AUTO \
 		-d MODULES \
+		$(addprefix -d ,$(LINUX_OFF_CONFIGS)) \
 		$(addprefix -e ,$(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS) $(LINUX_VIDEO_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
@@ -573,6 +581,10 @@ linux: linux-patches | $(MONACO_OUT)
 	@for c in $(LINUX_DSP_CONFIGS) $(LINUX_TEST_CONFIGS) $(LINUX_VIDEO_CONFIGS); do \
 		grep -qx "CONFIG_$$c=y" $(LINUX_PATH)/.config || \
 		{ echo "ERROR: CONFIG_$$c is not built in: run 'make linux-defconfig'"; exit 1; }; \
+	done
+	@for c in $(LINUX_OFF_CONFIGS); do \
+		! grep -q "^CONFIG_$$c=" $(LINUX_PATH)/.config || \
+		{ echo "ERROR: CONFIG_$$c is set: run 'make linux-defconfig'"; exit 1; }; \
 	done
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) -j$(shell nproc) \
 		LOCALVERSION=-$(BUILD_ID) DTC_FLAGS_$(LINUX_DT)=-@ \

@@ -678,6 +678,14 @@ bootimage-clean: spl-clean uefi-clean tfa-clean optee-os-clean u-boot-clean u-bo
 ################################################################################
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
 LINUX_DEFCONFIG ?= defconfig
+# LINUX_OFF_CONFIGS: left out by linux-defconfig; linux fails if any of
+# them is set.
+#   ARM_SMCCC_SOC_ID: the SMCCC SoC ID device (TF-A answers
+#   SMCCC_ARCH_SOC_ID) registers before the Qualcomm socinfo device and takes
+#   soc0, whose soc_id then reads jep106:0070:<id> instead of the socinfo
+#   number. The Qualcomm AI Runtime reads soc0's soc_id as a number and
+#   aborts; the socinfo device carries the same SoC ID.
+LINUX_OFF_CONFIGS = ARM_SMCCC_SOC_ID
 
 .PHONY: linux-defconfig linux linux-clean
 
@@ -712,7 +720,8 @@ linux-defconfig:
 		-e DMABUF_HEAPS \
 		-e DMABUF_HEAPS_SYSTEM \
 		-e DMABUF_HEAPS_CMA \
-		-d MODULES
+		-d MODULES \
+		$(addprefix -d ,$(LINUX_OFF_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
 linux: linux-overlays
@@ -724,6 +733,10 @@ linux: linux-overlays
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) linux-defconfig; \
 	fi
+	@for c in $(LINUX_OFF_CONFIGS); do \
+		! grep -q "^CONFIG_$$c=" $(LINUX_PATH)/.config || \
+		{ echo "ERROR: CONFIG_$$c is set: run 'make linux-defconfig'"; exit 1; }; \
+	done
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) -j$(shell nproc) Image vmlinuz.efi
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) -j1 dtbs
 

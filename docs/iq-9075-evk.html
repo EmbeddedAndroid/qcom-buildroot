@@ -64,7 +64,7 @@
     <tr><td>TF-A</td><td>qualcomm-linux/trusted-firmware-a, <code>qcom-next</code></td><td><code>PLAT=lemans_evk SPD=opteed</code>, BL31 only</td></tr>
     <tr><td>OP-TEE</td><td>OP-TEE/optee_os, <code>master</code></td><td><code>PLATFORM=qcom-lemans</code>, with the <code>qcom_pas</code> early TA</td></tr>
     <tr><td>U-Boot</td><td>qualcomm-linux/u-boot, <code>qcom-next</code></td><td>SPL and proper, plus the overlays in <code>lemans/patches/u-boot/</code></td></tr>
-    <tr><td>Linux</td><td>qualcomm-linux/kernel-topics, <code>tech/security/optee</code></td><td>arm64 <code>defconfig</code> with OP-TEE, PAS, FastRPC and no modules; <code>lemans-evk-el2.dtb</code></td></tr>
+    <tr><td>Linux</td><td>qualcomm-linux/kernel-topics, <code>tech/security/optee</code></td><td>arm64 <code>defconfig</code> with OP-TEE, PAS, FastRPC, no SMCCC SoC ID device and no modules; <code>lemans-evk-el2.dtb</code></td></tr>
   </table>
   <p>Each tree is pinned to a revision in the manifest.</p>
 
