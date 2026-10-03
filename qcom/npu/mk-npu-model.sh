@@ -11,7 +11,11 @@
 #     qairt-quantizer the 8-bit DLC (per-channel weights, calibrated on the
 #     images) the HTP runs, and the x86 qnn-net-run gives the CPU and HTP
 #     simulation outputs the test compares the board's with. Nothing from the
-#     SDK goes into <output dir>.
+#     SDK goes into <output dir>;
+#   - the same model for TensorFlow Lite (fp32, NHWC input), for the CPU
+#     (XNNPACK) and GPU delegate runs: onnxsim fixes the batch to 1 and folds
+#     the shape computation, onnx2tf converts, LiteRT on this host gives the
+#     reference outputs (Python 3.12, requirements-tflite.txt).
 # Every download is checked against its pinned hash. The converters need an
 # x86_64 Linux host, libc++1, libc++abi1 and libatomic1; Python 3.10 and the
 # packages of requirements.txt come from uv. NPU_CACHE (default
@@ -87,6 +91,14 @@ if [ ! -x "$venv/bin/python" ] || ! cmp -s "$here/requirements.txt" "$venv/requi
 	cp "$here/requirements.txt" "$venv/requirements.txt"
 fi
 
+tvenv=$cache/venv-tflite
+if [ ! -x "$tvenv/bin/python" ] || ! cmp -s "$here/requirements-tflite.txt" "$tvenv/requirements.txt"; then
+	rm -rf "$tvenv"
+	"$uv" venv -q --python 3.12.15 "$tvenv"
+	VIRTUAL_ENV=$tvenv "$uv" pip install -q -r "$here/requirements-tflite.txt"
+	cp "$here/requirements-tflite.txt" "$tvenv/requirements.txt"
+fi
+
 work=$cache/work
 rm -rf "$work" && mkdir -p "$work"
 cp -r "$cache/img" "$work/img"
@@ -98,6 +110,18 @@ pylib=$("$venv/bin/python" -c 'import sysconfig; print(sysconfig.get_config_var(
 export LD_LIBRARY_PATH=$sdk/lib/x86_64-linux-clang:$pylib
 L=$sdk/lib/x86_64-linux-clang
 python "$here/model.py" prep "$work"
+# TensorFlow Lite, outside the QAIRT environment (its libraries and Python
+# path are for the 3.10 tools). onnx2tf checks its output against ONNX
+# Runtime and fails on a mismatch (-ewo -efot).
+T="env -u LD_LIBRARY_PATH -u PYTHONPATH PATH=$tvenv/bin:/usr/bin:/bin HOME=$cache"
+$T onnxsim "$work/mobilenetv2-12.onnx" "$work/sim.onnx" \
+	--overwrite-input-shape input:1,3,224,224 > "$work/onnxsim.log" 2>&1 ||
+	{ tail -20 "$work/onnxsim.log"; exit 1; }
+$T onnx2tf -i "$work/sim.onnx" -o "$work/tflite" -ewo -efot \
+	> "$work/onnx2tf.log" 2>&1 || { tail -20 "$work/onnx2tf.log"; exit 1; }
+cp "$work/tflite/sim_float32.tflite" "$work/mobilenet_v2_fp32.tflite"
+$T python "$here/model.py" tflite "$work" > "$work/tflite.log" 2>&1 ||
+	{ tail -20 "$work/tflite.log"; exit 1; }
 qairt-converter --input_network "$work/mobilenetv2-12.onnx" \
 	--source_model_input_shape input 1,3,224,224 \
 	--source_model_input_layout input NCHW \
@@ -135,9 +159,12 @@ done
 	echo "Conversion: Qualcomm AI Runtime (QAIRT) $QAIRT_VERSION on x86_64:"
 	echo "  mobilenet_v2_fp32.dlc  qairt-converter, input NCHW float32, output 1000 logits (QNN CPU backend)"
 	echo "  mobilenet_v2_int8.dlc  qairt-quantizer --use_per_channel_quantization, calibrated on the inputs (QNN HTP)"
+	echo "TensorFlow Lite: onnxsim (batch 1, shapes folded) and onnx2tf 2.6.9 on x86_64:"
+	echo "  mobilenet_v2_fp32.tflite  input NHWC float32 (inputs-nhwc/), output 1000 logits (XNNPACK, GPU delegate)"
 	echo "Inputs: shorter side to 256 (bilinear), center crop 224, RGB in [0,1], ImageNet mean/std, NCHW float32."
 	echo "expected.txt: the ONNX Runtime fp32 top-1, each image's label."
 	echo "host-cpu/: the x86 qnn-net-run CPU backend outputs; host-htp-<arch>/: the x86 HTP simulation of each Hexagon architecture."
+	echo "host-tflite/: the x86 LiteRT outputs of the TensorFlow Lite model."
 	echo
 	echo "Images (Wikimedia Commons, $COMMONS/<path>; sha1 of the original):"
 	echo "$IMAGES" | while read -r n p sha1; do echo "  $n $p $sha1"; done

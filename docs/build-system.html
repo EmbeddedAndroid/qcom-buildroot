@@ -184,12 +184,19 @@ repo sync -j4 --no-clone-bundle</pre>
       from Wikimedia Commons preprocessed to the model input, the expected
       class of each (the ONNX Runtime fp32 top-1, equal to its label), the x86
       CPU outputs and the HTP simulation outputs of each Hexagon architecture
-      the boards have (v68, v73, v75), and <code>MANIFEST.sha256</code>.</li>
+      the boards have (v68, v73, v75), and <code>MANIFEST.sha256</code>. The
+      same model for TensorFlow Lite (fp32, NHWC input, the inputs in that
+      layout and the x86 LiteRT outputs), for the CPU (XNNPACK) and GPU
+      delegate runs on boards whose image has TensorFlow Lite.</li>
     <li>The <code>npu-model</code> target builds it on the build host with
       <code>qcom/npu/mk-npu-model.sh</code> from pinned inputs, each checked
       against its hash: the model, the images, uv (for Python 3.10 and the
       packages of <code>qcom/npu/requirements.txt</code>) and the QAIRT SDK
       zip from Qualcomm's download URL, whose converters make the DLCs. The
+      TensorFlow Lite model comes from <code>onnxsim</code> (batch 1, shape
+      computation folded) and <code>onnx2tf</code>, which must reproduce the
+      ONNX Runtime outputs, in a Python 3.12 environment
+      (<code>qcom/npu/requirements-tflite.txt</code>). The
       SDK stays on the build host: its license does not allow redistributing
       it on its own, so nothing of it goes into the image. It needs an x86_64
       host with <code>curl</code>, <code>unzip</code>, <code>libc++1</code>,
