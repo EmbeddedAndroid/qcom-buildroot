@@ -23,7 +23,9 @@
       and the RB3 Gen 2, and U-Boot;</li>
     <li>a Linux kernel with a Buildroot initramfs, packed in a UKI;</li>
     <li>the ADSP and CDSP firmware from linux-firmware and the FastRPC userspace
-      and DSP runtime, in the initramfs.</li>
+      and DSP runtime, in the initramfs;</li>
+    <li>the Adreno 643 GPU firmware from linux-firmware, in the
+      initramfs.</li>
   </ul>
 
   <table class="rtd-table">
@@ -139,6 +141,16 @@
     <a href="build-system.html#npu-test">NPU test</a>), which runs on the
     CDSP's HTP: board facts <code>HTP_ARCH=v68</code>,
     <code>HTP_DEVICES=0:cdsp</code>.
+  </p>
+
+  <h2 id="gpu">GPU</h2>
+  <p>
+    The msm driver brings up the Adreno 643 with its SQE microcode,
+    <code>qcom/a660_sqe.fw</code>, and its GMU firmware,
+    <code>qcom/a660_gmu.bin</code>, both from linux-firmware, in the rootfs
+    and checked against <code>kodiak/dsp-firmware.sha256</code>. The Kodiak EL2
+    overlay disables the zap shader: Linux takes the GPU out of secure mode
+    itself, so the zap shader firmware is not installed.
   </p>
 
   <h2 id="sources">Sources</h2>

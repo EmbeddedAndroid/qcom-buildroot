@@ -18,8 +18,8 @@
 #               initramfs), flashed to efi
 #
 # The initramfs carries the ADSP and CDSP firmware from linux-firmware, which
-# Linux starts through the OP-TEE PAS service, and the FastRPC runtime the
-# DSPs load their user processes from (dsp-firmware).
+# Linux starts through the OP-TEE PAS service, the FastRPC runtime the DSPs
+# load their user processes from and the Adreno 643 firmware (dsp-firmware).
 #
 # XBL authenticates the TZ image with the QTI authenticator even when secure
 # boot is disabled, so a qtestsign signature is not accepted for tz.mbn.
@@ -510,6 +510,11 @@ linux-clean:
 #   /lib/firmware/qcom/vpu/      the video codec firmware (VIDEO_FW_FILES,
 #                                VIDEO.VPU.2.0-00055-PROD-1), which iris loads
 #                                on the first open of a video node
+#   /lib/firmware/qcom/          the Adreno 643 firmware the msm driver loads
+#                                when it binds the GPU (GPU_FW_FILES: the SQE
+#                                microcode and the GMU firmware); the Kodiak
+#                                EL2 overlay disables the zap shader, so its
+#                                firmware is not installed
 #   /usr/share/qcom/             the FastRPC DSP runtime (fastrpc_shell_N,
 #                                skels) and the conf.d yaml that maps the DT
 #                                model to it
@@ -529,6 +534,7 @@ DSP_FW_SRC    = qcom/qcm6490
 DSP_FW_DIR    = qcom/qcs6490
 DSP_FW_FILES  = adsp.mbn adspr.jsn adsps.jsn adspua.jsn battmgr.jsn cdsp.mbn cdspr.jsn
 VIDEO_FW_FILES = qcom/vpu/vpu20_p1.mbn
+GPU_FW_FILES   = qcom/a660_sqe.fw qcom/a660_gmu.bin
 DSP_FW_SHA256 = $(CURDIR)/kodiak/dsp-firmware.sha256
 DSP_BIN_REPO ?= https://github.com/linux-msm/dsp-binaries.git
 DSP_BIN_TAG  ?= 20260916
@@ -556,7 +562,7 @@ dsp-firmware:
 		$(DSP_FW_GIT) fetch -q --depth=1 --filter=blob:none $(DSP_FW_REPO) $(DSP_FW_REV); }
 	@# Set on every run, so a clone made for an earlier file list gets the new files.
 	$(DSP_FW_GIT) sparse-checkout set --no-cone /LICENSE.qcom /qcom/NOTICE.txt \
-		$(addprefix /$(DSP_FW_SRC)/,$(DSP_FW_FILES)) $(addprefix /,$(VIDEO_FW_FILES))
+		$(addprefix /$(DSP_FW_SRC)/,$(DSP_FW_FILES)) $(addprefix /,$(VIDEO_FW_FILES) $(GPU_FW_FILES))
 	$(DSP_FW_GIT) checkout -q $(DSP_FW_REV)
 	[ "$$($(DSP_BIN_GIT) describe --tags --exact-match 2>/dev/null)" = $(DSP_BIN_TAG) ] || { \
 		rm -rf $(DSP_OUT)/dsp-binaries && \
@@ -572,7 +578,7 @@ dsp-firmware:
 	cp $(DSP_OUT)/linux-firmware/qcom/NOTICE.txt $(DSP_OVERLAY)/lib/firmware/qcom/
 	cd $(DSP_OUT)/linux-firmware/$(DSP_FW_SRC) && \
 		cp $(DSP_FW_FILES) $(DSP_OVERLAY)/lib/firmware/$(DSP_FW_DIR)/
-	for f in $(VIDEO_FW_FILES); do \
+	for f in $(VIDEO_FW_FILES) $(GPU_FW_FILES); do \
 		cp $(DSP_OUT)/linux-firmware/$$f $(DSP_OVERLAY)/lib/firmware/$$f || exit 1; \
 	done
 	for b in $(DSP_BIN_BUILDS); do \
