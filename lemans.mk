@@ -1246,6 +1246,12 @@ FW_SOC         = qcom/sa8775p
 # not the per-SoC qcom/sa8775p/ dir. meta-qcom stages all of qcom/vpu; do the
 # same so request_firmware() finds whichever vpu*.mbn the driver asks for.
 FW_VPU         = qcom/vpu
+# Adreno 663 firmware the msm driver loads from qcom/ when it binds the GPU:
+# the SQE microcode and the GMU firmware the a6xx catalog names, checked
+# against GPU_FW_SHA256 with LICENSE.qcom and qcom/NOTICE.txt, the terms they
+# are distributed under. The Lemans EL2 overlay disables the zap shader.
+GPU_FW_FILES   = qcom/a660_sqe.fw qcom/a663_gmu.bin
+GPU_FW_SHA256  = $(CURDIR)/lemans/gpu-firmware.sha256
 FW_CLONE_DIR   = $(BLOBS_DIR)/linux-firmware
 DSP_REPO       = https://github.com/linux-msm/dsp-binaries.git
 DSP_TAG        = 20260916
@@ -1275,6 +1281,8 @@ buildroot: linux-firmware | $(OVERLAY_DIR)
 # linux-firmware — stage upstream linux-firmware into the buildroot overlay:
 #   /lib/firmware/$(FW_SOC)  — per-SoC DSP/remoteproc + QUP blobs
 #   /lib/firmware/$(FW_VPU)  — venus/iris video-codec firmware (vpu*.mbn)
+#   /lib/firmware/qcom       the Adreno 663 firmware (GPU_FW_FILES) and
+#                            /lib/firmware the license files
 #   /usr/share/qcom          the FastRPC DSP runtime of those DSP images
 # Standalone target, independent of fetch-blobs; 'buildroot' (and hence 'efi')
 # depends on it so the firmware is baked into the rootfs/UKI regardless of when
@@ -1301,7 +1309,11 @@ linux-firmware: | $(OVERLAY_DIR)
 	@# vpu30_p4_s7.mbn symlinks the iris driver resolves via request_firmware().
 	@mkdir -p $(FW_VPU_DEST)
 	@cp -a $(FW_CLONE_DIR)/$(FW_VPU)/. $(FW_VPU_DEST)/
-	@echo "linux-firmware staged in $(FW_DEST_DIR)/ and $(FW_VPU_DEST)/ (pinned $(FW_SRCREV))"
+	for f in LICENSE.qcom qcom/NOTICE.txt $(GPU_FW_FILES); do \
+		git -C $(FW_CLONE_DIR) show $(FW_SRCREV):$$f > $(OVERLAY_DIR)/lib/firmware/$$f || exit 1; \
+	done
+	cd $(OVERLAY_DIR) && sha256sum --quiet -c $(GPU_FW_SHA256)
+	@echo "linux-firmware staged in $(FW_DEST_DIR)/, $(FW_VPU_DEST)/ and the GPU firmware (pinned $(FW_SRCREV))"
 	[ "$$(git -C $(DSP_CLONE_DIR) describe --tags --exact-match 2>/dev/null)" = $(DSP_TAG) ] || { \
 		rm -rf $(DSP_CLONE_DIR) && \
 		git clone -q --depth=1 --filter=blob:none --no-checkout --branch $(DSP_TAG) \
@@ -1327,6 +1339,7 @@ linux-firmware: | $(OVERLAY_DIR)
 # staged into the buildroot overlay (per-SoC + video-codec dirs).
 linux-firmware-clean:
 	rm -rf $(FW_CLONE_DIR) $(FW_DEST_DIR) $(FW_VPU_DEST) $(DSP_CLONE_DIR) $(DSP_SHARE_DIR)
+	rm -f $(addprefix $(OVERLAY_DIR)/lib/firmware/,LICENSE.qcom qcom/NOTICE.txt $(GPU_FW_FILES))
 
 fetch-blobs: $(BLOBS_STAMP)
 

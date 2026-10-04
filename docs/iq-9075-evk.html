@@ -142,6 +142,17 @@ make flash-kernel   # LUN 0: efi.bin</pre>
     CDSP, device 1 the CDSP1).
   </p>
 
+  <h2 id="gpu">GPU</h2>
+  <p>
+    The msm driver brings up the Adreno 663 with its SQE microcode,
+    <code>qcom/a660_sqe.fw</code>, and its GMU firmware,
+    <code>qcom/a663_gmu.bin</code>, which <code>linux-firmware</code> stages
+    from the pinned linux-firmware revision with <code>LICENSE.qcom</code> and
+    checks against <code>lemans/gpu-firmware.sha256</code>. The Lemans EL2
+    overlay disables the zap shader: Linux takes the GPU out of secure mode
+    itself, so no zap shader is loaded.
+  </p>
+
 </main>
 <script src="_rtd.js"></script>
 </body>
