@@ -312,6 +312,14 @@ aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
       which the <code>inference</code> test drives on the CPU and the GPU.</li>
   </ul>
   <p>
+    The rootfs is the initramfs, so <code>br-ext/board/monaco/post-build.sh</code>
+    removes what these packages install for developers and nothing on the board
+    uses: the libclc bitcode of other GPUs (RustiCL loads only the SPIR-V
+    libraries), libclang (RustiCL links libclang-cpp), the Clang analyzer, the
+    SPIRV command line tools, the Vulkan API registry and the FlatBuffers
+    compiler.
+  </p>
+  <p>
     The EL2 overlay disables the zap shader: Linux takes the GPU out of secure
     mode itself, with no zap shader firmware. The GPU SMMU aperture, through
     which the GPU switches page tables per process, is set up by TF-A BL31 at

@@ -178,6 +178,10 @@ BR2_PACKAGE_CLINFO                          = y
 BR2_PACKAGE_TENSORFLOW_LITE                 = y
 BR2_PACKAGE_TENSORFLOW_LITE_GPU             = y
 BR2_PACKAGE_TFLITE_RUN_EXT                  = y
+# The rootfs is the initramfs: the post-build script removes the developer
+# tools and data these packages install that nothing on the target uses
+# (other libclc targets, libclang, SPIRV tools, the Vulkan registry).
+BR2_ROOTFS_POST_BUILD_SCRIPT                = $(ROOT)/build/br-ext/board/monaco/post-build.sh
 # KVM: kvmtool and the KVM unit tests built for it, with their runner (bash)
 # in /opt/kvm-unit-tests, and a small Linux guest (kernel and BusyBox
 # initramfs) in /opt/kvm-guest. kvmtool reads console input only from a
