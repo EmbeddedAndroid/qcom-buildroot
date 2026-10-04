@@ -229,15 +229,16 @@ repo sync -j4 --no-clone-bundle</pre>
     <li>Mesa freedreno with EGL, OpenGL ES and GBM, and
       <code>egl-readback</code>, the headless render check;</li>
     <li>OpenCL from Mesa RustiCL with the ICD loader and <code>clinfo</code>;
-      <code>/etc/profile.d/rusticl.sh</code> sets <code>RUSTICL_ENABLE</code>,
-      without which Mesa 25.1 exposes no freedreno device to OpenCL;</li>
+      Mesa 25.2 enables the freedreno device in RustiCL by default;</li>
     <li>TensorFlow Lite with XNNPACK and its GPU delegate (OpenCL backend), and
       <code>tflite-run</code>.</li>
   </ul>
   <p>
-    It applies the Buildroot patches of <code>monaco/buildroot-patches/</code>
-    (the Mesa, RustiCL, TensorFlow Lite and XNNPACK changes the VENTUNO Q
-    image introduced), so every board builds the same Mesa. The board stages
+    It applies the Buildroot patches of <code>qcom/gpu/buildroot-patches/</code>
+    (Mesa 25.2.8, RustiCL, the TensorFlow Lite GPU delegate and XNNPACK), so
+    every board builds the same Mesa, and <code>qcom/gpu/post-build.sh</code>
+    removes the developer tools these packages install, as the rootfs is the
+    initramfs. The board stages
     the GPU firmware from linux-firmware. <code>QCOM_GPU=n</code> leaves the
     GPU userspace out; the GPU cases then skip.
   </p>

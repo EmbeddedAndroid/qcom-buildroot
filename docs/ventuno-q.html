@@ -128,7 +128,7 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
         which the <code>linux-patches</code> target applies once.</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST, no SMCCC SoC ID device and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>), with the patches in
-        <code>monaco/buildroot-patches/</code>, which the <code>buildroot</code>
+        <code>qcom/gpu/buildroot-patches/</code> (<code>qcom/gpu/gpu.mk</code>), which the <code>buildroot</code>
         target applies once: Mesa 25.2.8 (Mesa 25.0 does not know the
         Adreno 623, Mesa 25.1 not the UNO Q's Adreno 702), and for inference
         on the GPU, Mesa RustiCL (OpenCL) with the OpenCL headers and ICD
@@ -312,7 +312,7 @@ aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
       which the <code>inference</code> test drives on the CPU and the GPU.</li>
   </ul>
   <p>
-    The rootfs is the initramfs, so <code>br-ext/board/monaco/post-build.sh</code>
+    The rootfs is the initramfs, so <code>qcom/gpu/post-build.sh</code>
     removes what these packages install for developers and nothing on the board
     uses: the libclc bitcode of other GPUs (RustiCL loads only the SPIR-V
     libraries), libclang (RustiCL links libclang-cpp), the Clang analyzer, the

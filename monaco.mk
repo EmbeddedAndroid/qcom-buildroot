@@ -55,7 +55,7 @@
 #   clean          clean all components and monaco/output/
 #
 # Component targets: optee-os, u-boot, u-boot-spl, tfa, fip, uefi, linux,
-# linux-patches, linux-defconfig, buildroot, buildroot-patches, dsp-firmware,
+# linux-patches, linux-defconfig, buildroot, gpu-buildroot-patches, dsp-firmware,
 # qtestsign-fetch, video-streams, and the matching *-clean targets.
 #
 # Configurable variables (command line or environment)
@@ -82,6 +82,9 @@
 #   QCOM_NPU_TEST     y to build the npu-qnn test model into
 #                     the rootfs (default: y; needs an x86_64 host, see
 #                     qcom/npu/npu.mk)
+#   QCOM_GPU          y to put the GPU userspace (Mesa with OpenCL, TensorFlow
+#                     Lite with its GPU delegate) in the rootfs (default: y;
+#                     see qcom/gpu/gpu.mk)
 #   tz-qti-sign:      SECTOOLS, QTI_SIGN_DIR, SECURITY_PROFILE,
 #                     CASS_CAPABILITY, QTI_SIGN_SERVER_URL,
 #                     QTI_SIGN_SERVER_PORT (see the tz-qti-sign section)
@@ -156,32 +159,8 @@ BR2_PACKAGE_STRESS_NG           = y
 BR2_PACKAGE_ALSA_UTILS          = y
 BR2_PACKAGE_ALSA_UTILS_APLAY    = y
 BR2_PACKAGE_ALSA_UTILS_AMIXER   = y
-# GPU userspace: Mesa freedreno with EGL, OpenGL ES and GBM (Mesa 25.2.8, see
-# buildroot-patches), and egl-readback, which renders on the GPU and checks
-# the pixels it reads back. The GPU firmware comes from the dsp-firmware
-# target.
-BR2_PACKAGE_MESA3D                          = y
-BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_FREEDRENO = y
-BR2_PACKAGE_MESA3D_OPENGL_EGL               = y
-BR2_PACKAGE_MESA3D_OPENGL_ES                = y
-BR2_PACKAGE_MESA3D_GBM                      = y
-BR2_PACKAGE_LIBDRM                          = y
-BR2_PACKAGE_EGL_READBACK_EXT                = y
-# Inference on the CPU and the GPU, as the stock image does it: OpenCL from
-# Mesa RustiCL on freedreno (with the ICD loader and clinfo) and TensorFlow
-# Lite with XNNPACK and its GPU delegate (OpenCL backend), which tflite-run
-# drives for the inference test. RustiCL enables freedreno by default.
-BR2_PACKAGE_MESA3D_LLVM                     = y
-BR2_PACKAGE_MESA3D_OPENCL                   = y
-BR2_PACKAGE_MESA3D_RUSTICL                  = y
-BR2_PACKAGE_CLINFO                          = y
-BR2_PACKAGE_TENSORFLOW_LITE                 = y
-BR2_PACKAGE_TENSORFLOW_LITE_GPU             = y
-BR2_PACKAGE_TFLITE_RUN_EXT                  = y
-# The rootfs is the initramfs: the post-build script removes the developer
-# tools and data these packages install that nothing on the target uses
-# (other libclc targets, libclang, SPIRV tools, the Vulkan registry).
-BR2_ROOTFS_POST_BUILD_SCRIPT                = $(ROOT)/build/br-ext/board/monaco/post-build.sh
+# The GPU userspace (Mesa freedreno, RustiCL, TensorFlow Lite) comes from
+# qcom/gpu/gpu.mk, the GPU firmware from the dsp-firmware target.
 # KVM: kvmtool and the KVM unit tests built for it, with their runner (bash)
 # in /opt/kvm-unit-tests, and a small Linux guest (kernel and BusyBox
 # initramfs) in /opt/kvm-guest. kvmtool reads console input only from a
@@ -203,6 +182,7 @@ include common.mk
 include toolchain.mk
 include qcom/video/video.mk
 include qcom/npu/npu.mk
+include qcom/gpu/gpu.mk
 
 # common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
 # which turns the Monaco target.mk's '+= qcom_pas/...' into a no-op. Append
@@ -273,7 +253,7 @@ help:
 	@echo "  clean          clean all components and monaco/output/"
 	@echo ""
 	@echo "Component targets: optee-os u-boot u-boot-spl tfa fip uefi linux"
-	@echo "  linux-patches linux-defconfig buildroot buildroot-patches dsp-firmware"
+	@echo "  linux-patches linux-defconfig buildroot gpu-buildroot-patches dsp-firmware"
 	@echo "  qtestsign-fetch video-streams, and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TZ_IMAGE TF_A_FLAGS TF_A_DEBUG U_BOOT_CONFIGS"
@@ -619,57 +599,6 @@ linux: linux-patches | $(MONACO_OUT)
 linux-clean:
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) clean
 	rm -f $(LINUX_DTB)
-
-################################################################################
-# Buildroot patches: monaco/buildroot-patches/*.patch, applied in order to the
-# Buildroot tree (common.xml pins 2025.05) before it builds. The last patch
-# that reverses cleanly marks the end of what is already applied (a later
-# patch can change the context of an earlier one, so earlier ones need not
-# reverse); the patches after it are applied.
-#   0001  Mesa 25.1.8 from Buildroot 2025.08; Mesa 25.0 does not know the
-#         Adreno 623
-#   0002  opencl-headers and
-#   0003  opencl-icd-loader, from Buildroot 2025.08
-#   0004  Mesa RustiCL from Buildroot 2025.08
-#   0005  RustiCL on freedreno
-#   0006  the TensorFlow Lite GPU delegate (OpenCL backend)
-#   0007  XNNPACK on AArch64 (TensorFlow Lite's CPU path)
-#   0008  SPIRV-Headers and SPIRV-Tools 1.3.280.0 (2024.1, which Mesa 25.1's
-#         OpenCL C compiler needs) and a SPIRV-LLVM-Translator v15 that
-#         builds against them
-#   0009  the TensorFlow Lite GPU delegate aligns image pitch in pixels, as
-#         OpenCL defines it (it divides by the bytes per pixel on Adreno,
-#         which Mesa RustiCL rejects once it offers images on buffers)
-#   0010  rust-bindgen 0.72.0 from Buildroot 2025.08 (Mesa 25.2 RustiCL needs
-#         0.71.1 or newer)
-#   0011  Mesa 25.2.8: the 25.2 series is the first whose freedreno knows
-#         the Adreno 702 (Arduino UNO Q), so the VENTUNO Q and the UNO Q
-#         share one Mesa
-# An existing output directory keeps the Mesa it built without OpenCL:
-# make mesa3d-dirclean there after enabling it.
-################################################################################
-BR_PATCHES = $(sort $(wildcard $(CURDIR)/monaco/buildroot-patches/*.patch))
-
-.PHONY: buildroot-patches
-
-buildroot: buildroot-patches
-
-buildroot-patches:
-	@n=0; i=0; \
-	for p in $(BR_PATCHES); do \
-		i=$$((i + 1)); \
-		git -C $(ROOT)/buildroot apply -R --check $$p 2>/dev/null && n=$$i; \
-	done; \
-	i=0; \
-	for p in $(BR_PATCHES); do \
-		i=$$((i + 1)); \
-		if [ $$i -le $$n ]; then \
-			echo "buildroot: $${p##*/} already applied"; \
-		else \
-			echo "buildroot: applying $${p##*/}"; \
-			git -C $(ROOT)/buildroot apply $$p || exit 1; \
-		fi; \
-	done
 
 ################################################################################
 # DSP firmware and FastRPC runtime, fetched at pinned revisions into
