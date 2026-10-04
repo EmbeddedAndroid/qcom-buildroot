@@ -19,7 +19,9 @@
 #
 # The initramfs carries the ADSP and CDSP firmware from linux-firmware, which
 # Linux starts through the OP-TEE PAS service, the FastRPC runtime the DSPs
-# load their user processes from and the Adreno 643 firmware (dsp-firmware).
+# load their user processes from and the Adreno 643 firmware (dsp-firmware),
+# and the GPU userspace (qcom/gpu/gpu.mk). With it the UKI is about 210 MB;
+# efi.bin holds it twice.
 #
 # XBL authenticates the TZ image with the QTI authenticator even when secure
 # boot is disabled, so a qtestsign signature is not accepted for tz.mbn.
@@ -77,6 +79,9 @@
 #   QCOM_NPU_TEST     y to build the npu-qnn test model into
 #                     the rootfs (default: y; needs an x86_64 host, see
 #                     qcom/npu/npu.mk)
+#   QCOM_GPU          y to put the GPU userspace (Mesa with OpenCL, TensorFlow
+#                     Lite with its GPU delegate) in the rootfs (default: y;
+#                     see qcom/gpu/gpu.mk)
 #   tz-qti-sign:      SECTOOLS, QTI_SIGN_DIR, SECURITY_PROFILE,
 #                     CASS_CAPABILITY, QTI_SIGN_SERVER_URL,
 #                     QTI_SIGN_SERVER_PORT (see the tz-qti-sign section)
@@ -159,6 +164,7 @@ include common.mk
 include toolchain.mk
 include qcom/video/video.mk
 include qcom/npu/npu.mk
+include qcom/gpu/gpu.mk
 
 # common.mk passes CFG_IN_TREE_EARLY_TAS to OP-TEE on the make command line,
 # which turns the Kodiak target.mk's '+= qcom_pas/...' into a no-op. Append

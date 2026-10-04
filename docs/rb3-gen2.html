@@ -152,6 +152,15 @@
     overlay disables the zap shader: Linux takes the GPU out of secure mode
     itself, so the zap shader firmware is not installed.
   </p>
+  <p>
+    The rootfs carries the GPU userspace of <code>qcom/gpu/gpu.mk</code> (see
+    <a href="build-system.html#gpu-userspace">GPU userspace</a>): Mesa
+    freedreno with EGL, OpenGL ES, GBM and RustiCL (OpenCL), TensorFlow Lite
+    with XNNPACK and its GPU delegate, <code>egl-readback</code>,
+    <code>clinfo</code> and <code>tflite-run</code>, for the
+    <code>gpu-render</code> test and the <code>cpu:tflite</code> and
+    <code>gpu:tflite-gpu</code> entries of the <code>inference</code> test.
+  </p>
 
   <h2 id="sources">Sources</h2>
   <table class="rtd-table">
