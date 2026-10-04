@@ -634,6 +634,9 @@ linux-clean:
 #   0008  SPIRV-Headers and SPIRV-Tools 1.3.280.0 (2024.1, which Mesa 25.1's
 #         OpenCL C compiler needs) and a SPIRV-LLVM-Translator v15 that
 #         builds against them
+#   0009  the TensorFlow Lite GPU delegate aligns image pitch in pixels, as
+#         OpenCL defines it (it divides by the bytes per pixel on Adreno,
+#         which Mesa RustiCL rejects once it offers images on buffers)
 # An existing output directory keeps the Mesa it built without OpenCL:
 # make mesa3d-dirclean there after enabling it.
 ################################################################################
