@@ -360,8 +360,19 @@ tz-qti-sign:
 # LINUX_TEST_CONFIGS: MEMTEST, the early memory test that memtest=<N> on the
 # kernel command line runs, and the kernel configuration in /proc/config.gz.
 # linux fails if any of them is not built in.
+# LINUX_OFF_CONFIGS: left out; linux fails if any of them is set.
+#   ARM_SMCCC_SOC_ID: the SMCCC SoC ID device (TF-A answers
+#   SMCCC_ARCH_SOC_ID) registers before the Qualcomm socinfo device and takes
+#   soc0, whose soc_id then reads jep106:0070:<id> instead of the socinfo
+#   number. The Qualcomm AI Runtime reads soc0's soc_id as a number and
+#   aborts; the socinfo device carries the same SoC ID.
+# LINUX_SOC_CONFIGS: QCOM_SOCINFO, built in so that the socinfo device is
+#   soc0 (the Yocto configuration builds it as a module, which nothing
+#   loads). linux fails if it is not built in.
 ################################################################################
 LINUX_TEST_CONFIGS  = MEMTEST IKCONFIG IKCONFIG_PROC
+LINUX_OFF_CONFIGS   = ARM_SMCCC_SOC_ID
+LINUX_SOC_CONFIGS   = QCOM_SOCINFO
 LINUX_MODULES_LOAD ?= phy-qcom-qusb2 phy-qcom-qmp-usbc
 LINUX_MODULES_DIR   = $(AGATTI_OUT)/modules
 LINUX_EXPORTS    = ARCH=arm64 CROSS_COMPILE="$(CCACHE)$(AARCH64_CROSS_COMPILE)"
@@ -398,16 +409,21 @@ linux-defconfig: linux-patches
 		-e VIRTUALIZATION \
 		-e KVM \
 		-d LOCALVERSION_AUTO \
-		$(addprefix -e ,$(LINUX_TEST_CONFIGS))
+		$(addprefix -d ,$(LINUX_OFF_CONFIGS)) \
+		$(addprefix -e ,$(LINUX_TEST_CONFIGS) $(LINUX_SOC_CONFIGS))
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) olddefconfig
 
 linux: linux-patches | $(AGATTI_OUT)
 	@if [ ! -f $(LINUX_PATH)/.config ]; then \
 		$(MAKE) -f $(firstword $(MAKEFILE_LIST)) linux-defconfig; \
 	fi
-	@for c in $(LINUX_TEST_CONFIGS); do \
+	@for c in $(LINUX_TEST_CONFIGS) $(LINUX_SOC_CONFIGS); do \
 		grep -qx "CONFIG_$$c=y" $(LINUX_PATH)/.config || \
 		{ echo "ERROR: CONFIG_$$c is not built in: run 'make linux-defconfig'"; exit 1; }; \
+	done
+	@for c in $(LINUX_OFF_CONFIGS); do \
+		! grep -q "^CONFIG_$$c=" $(LINUX_PATH)/.config || \
+		{ echo "ERROR: CONFIG_$$c is set: run 'make linux-defconfig'"; exit 1; }; \
 	done
 	$(LINUX_EXPORTS) $(MAKE) -C $(LINUX_PATH) -j$(shell nproc) \
 		LOCALVERSION=-$(BUILD_ID) Image qcom/$(LINUX_DT).dtb

@@ -81,7 +81,10 @@
         series in <code>agatti/patches/linux/</code>, which the
         <code>linux-patches</code> target applies once.</td>
         <td><code>agatti/linux.config</code> (the Yocto image's configuration
-        as a defconfig) with OP-TEE, KVM and MEMTEST built in;
+        as a defconfig) with OP-TEE, KVM, MEMTEST and the Qualcomm socinfo driver
+        built in and no SMCCC SoC ID device (it would take
+        <code>/sys/devices/soc0</code> from the socinfo device, see the
+        <a href="build-system.html">build system</a>);
         <code>qcom/qrb2210-arduino-imola.dtb</code>; the modules in the rootfs</td></tr>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>)</td>
         <td>The rootfs, a gzip-compressed cpio used as the initramfs: xtest,
