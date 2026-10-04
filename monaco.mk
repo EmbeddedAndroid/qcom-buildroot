@@ -156,7 +156,7 @@ BR2_PACKAGE_STRESS_NG           = y
 BR2_PACKAGE_ALSA_UTILS          = y
 BR2_PACKAGE_ALSA_UTILS_APLAY    = y
 BR2_PACKAGE_ALSA_UTILS_AMIXER   = y
-# GPU userspace: Mesa freedreno with EGL, OpenGL ES and GBM (Mesa 25.1.8, see
+# GPU userspace: Mesa freedreno with EGL, OpenGL ES and GBM (Mesa 25.2.8, see
 # buildroot-patches), and egl-readback, which renders on the GPU and checks
 # the pixels it reads back. The GPU firmware comes from the dsp-firmware
 # target.
@@ -170,8 +170,7 @@ BR2_PACKAGE_EGL_READBACK_EXT                = y
 # Inference on the CPU and the GPU, as the stock image does it: OpenCL from
 # Mesa RustiCL on freedreno (with the ICD loader and clinfo) and TensorFlow
 # Lite with XNNPACK and its GPU delegate (OpenCL backend), which tflite-run
-# drives for the inference test. Mesa 25.1 exposes the freedreno device
-# only when RUSTICL_ENABLE names it (monaco/overlay/etc/profile.d).
+# drives for the inference test. RustiCL enables freedreno by default.
 BR2_PACKAGE_MESA3D_LLVM                     = y
 BR2_PACKAGE_MESA3D_OPENCL                   = y
 BR2_PACKAGE_MESA3D_RUSTICL                  = y
@@ -637,6 +636,11 @@ linux-clean:
 #   0009  the TensorFlow Lite GPU delegate aligns image pitch in pixels, as
 #         OpenCL defines it (it divides by the bytes per pixel on Adreno,
 #         which Mesa RustiCL rejects once it offers images on buffers)
+#   0010  rust-bindgen 0.72.0 from Buildroot 2025.08 (Mesa 25.2 RustiCL needs
+#         0.71.1 or newer)
+#   0011  Mesa 25.2.8: the 25.2 series is the first whose freedreno knows
+#         the Adreno 702 (Arduino UNO Q), so the VENTUNO Q and the UNO Q
+#         share one Mesa
 # An existing output directory keeps the Mesa it built without OpenCL:
 # make mesa3d-dirclean there after enabling it.
 ################################################################################

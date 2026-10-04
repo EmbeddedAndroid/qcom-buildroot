@@ -129,11 +129,12 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST, no SMCCC SoC ID device and no modules; <code>qcom/monaco-arduino-monza.dtb</code> with <code>qcom/monaco-el2.dtbo</code> applied</td></tr>
     <tr><td>Buildroot</td><td>2025.05 (<code>common.xml</code>), with the patches in
         <code>monaco/buildroot-patches/</code>, which the <code>buildroot</code>
-        target applies once: Mesa 25.1.8 from Buildroot 2025.08, since Mesa 25.0
-        does not know the Adreno 623, and for inference on the GPU, Mesa
-        RustiCL (OpenCL) with the OpenCL headers and ICD loader from 2025.08,
-        RustiCL on freedreno, the TensorFlow Lite GPU delegate, XNNPACK on
-        AArch64 and SPIRV-Tools 2024.1.</td>
+        target applies once: Mesa 25.2.8 (Mesa 25.0 does not know the
+        Adreno 623, Mesa 25.1 not the UNO Q's Adreno 702), and for inference
+        on the GPU, Mesa RustiCL (OpenCL) with the OpenCL headers and ICD
+        loader from 2025.08, RustiCL on freedreno, the TensorFlow Lite GPU
+        delegate, XNNPACK on AArch64, SPIRV-Tools 2024.1 and rust-bindgen
+        0.72.0.</td>
         <td>The rootfs, a gzip-compressed cpio used as the initramfs</td></tr>
   </table>
   <p>
@@ -304,9 +305,8 @@ aplay -D hw:arduinomonza,0 -f S16_LE -r 48000 -c 2 file.wav</pre>
     <li><code>egl-readback</code>: renders on the GPU through the render node,
       without a display, reads the pixels back and checks them, then times 500
       frames. It exits 0 only if the GPU drew the expected pixels;</li>
-    <li>OpenCL from Mesa RustiCL with the ICD loader and <code>clinfo</code>.
-      Mesa 25.1 exposes the GPU to OpenCL only when <code>RUSTICL_ENABLE</code>
-      names its driver, which <code>/etc/profile.d/rusticl.sh</code> does;</li>
+    <li>OpenCL from Mesa RustiCL with the ICD loader and <code>clinfo</code>;
+      RustiCL enables freedreno by default;</li>
     <li>TensorFlow Lite with XNNPACK and its GPU delegate (OpenCL backend), as
       the stock image runs models on the GPU, and <code>tflite-run</code>,
       which the <code>inference</code> test drives on the CPU and the GPU.</li>
