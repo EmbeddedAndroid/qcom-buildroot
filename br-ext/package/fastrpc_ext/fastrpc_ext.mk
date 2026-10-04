@@ -12,11 +12,13 @@
 # The stub/skel search paths are compiled into the binary (-Dtestlibdir /
 # -Dtestdspdir), so no extra install hook or runtime configuration is needed.
 #
-# Pinned to the same commit as meta-qcom fastrpc_1.0.5.bb (tag v1.0.5).
+# Tag v1.0.8. v1.0.6 and later carry the poll mode (FASTRPC_IOCTL_SET_OPTION)
+# that the QNN HTP backend requests on Hexagon v69 and later, and install the
+# daemons in /usr/sbin.
 #
 ################################################################################
 
-FASTRPC_EXT_VERSION = 29851fde11d4e2a4ce221536485d0f7d46ffca30
+FASTRPC_EXT_VERSION = d247519650fe5cb16de6c78edaa95bcc4be25073
 FASTRPC_EXT_SITE = https://github.com/qualcomm/fastrpc.git
 FASTRPC_EXT_SITE_METHOD = git
 FASTRPC_EXT_LICENSE_FILES = LICENSE.txt
