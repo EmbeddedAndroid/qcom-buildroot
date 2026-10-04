@@ -1,0 +1,138 @@
+From 786bb8c6ecc7514f81ddf175a4a1467a38f0a8a9 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Sun, 4 Oct 2026 10:33:52 -0400
+Subject: [PATCH] fix(qti): program the Lemans GPU SMMU aperture
+
+The Adreno CP updates the GPU SMMU context banks for per-process page
+tables through the GPU SMMU aperture at 0x03d60000, which the secure
+world sets up. Lemans BL31 never programs it, so the first command
+stream that switches page tables stalls the CP and the GPU hangs:
+
+  APERTURE 0x03d60000 0x00000000 (CB0), 0x03d60008 0x00000004 (CTL)
+  egl-readback: FAIL: unexpected pixels
+  adreno 3d00000.gpu: [drm:a6xx_irq] *ERROR* gpu fault ring 0
+    fence ffffffd5 status 00800007 rb 0012/0046
+  msm_dpu ae01000.display-controller: [drm:recover_worker] *ERROR*
+    06060300: hangcheck recover!
+
+The aperture sits in the GPU CX domain, which is powered, with register
+retention on, only between qti_clock_init() and qti_clock_init_done().
+Add a qti_smmu_clocked_init() hook called there, empty by default, and
+program aperture slots 0, 1 and 6 for GPU SMMU context banks 0, 1 and 2
+from it on Lemans, the values the Lemans QTEE writes.
+
+Change-Id: I76d0c6c2921e38aba25b760a7adb314cc2352283
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Assisted-by: Claude:claude-opus-5-5
+---
+ drivers/qti/smmu/lemans/smmu_cfg.c         | 13 +++++++++++++
+ drivers/qti/smmu/smmu.c                    | 10 ++++++++++
+ include/drivers/qti/smmu/lemans/smmu_cfg.h | 20 ++++++++++++++++++++
+ include/drivers/qti/smmu/smmu.h            |  2 ++
+ plat/qti/common/src/qti_bl31_setup.c       |  1 +
+ 5 files changed, 46 insertions(+)
+
+diff --git a/drivers/qti/smmu/lemans/smmu_cfg.c b/drivers/qti/smmu/lemans/smmu_cfg.c
+index 5c2dc8046..51ec10939 100644
+--- a/drivers/qti/smmu/lemans/smmu_cfg.c
++++ b/drivers/qti/smmu/lemans/smmu_cfg.c
+@@ -9,6 +9,7 @@
+ #include <stdint.h>
+ 
+ #include <drivers/qti/smmu/lemans/smmu_cfg.h>
++#include <lib/mmio.h>
+ #include "lib/utils_def.h"
+ 
+ struct smmu_cfg_s qti_smmu_cfg[] = {
+@@ -179,3 +180,15 @@ struct smmu_cfg_s qti_smmu_cfg[] = {
+ };
+ 
+ const size_t qti_smmu_cfg_count = ARRAY_SIZE(qti_smmu_cfg);
++
++/*
++ * Called with the GPU CX domain powered and its retention enabled, so the
++ * aperture survives the CX collapse at qti_clock_init_done().
++ */
++void qti_smmu_clocked_init(void)
++{
++	mmio_write_32(GPU_SMMU_APERTURE_S1CB0_ADDR, GPU_SMMU_APERTURE_CB(0));
++	mmio_write_32(GPU_SMMU_APERTURE_S1CB1_ADDR, GPU_SMMU_APERTURE_CB(1));
++	mmio_write_32(GPU_SMMU_APERTURE_S1CB6_ADDR, GPU_SMMU_APERTURE_CB(2));
++	mmio_write_32(GPU_SMMU_APERTURE_CTL_ADDR, GPU_SMMU_APERTURE_CTL);
++}
+diff --git a/drivers/qti/smmu/smmu.c b/drivers/qti/smmu/smmu.c
+index 05b61b6fc..fc2b07568 100644
+--- a/drivers/qti/smmu/smmu.c
++++ b/drivers/qti/smmu/smmu.c
+@@ -18,3 +18,13 @@ void qti_smmu_init(void)
+ 		mmio_write_32(qti_smmu_cfg[i].addr, qti_smmu_cfg[i].value);
+ 	}
+ }
++
++/*
++ * SMMU registers that are only reachable with the boot clocks on and their
++ * power domains up, between qti_clock_init() and qti_clock_init_done().
++ * None by default.
++ */
++#pragma weak qti_smmu_clocked_init
++void qti_smmu_clocked_init(void)
++{
++}
+diff --git a/include/drivers/qti/smmu/lemans/smmu_cfg.h b/include/drivers/qti/smmu/lemans/smmu_cfg.h
+index f5dada0ad..33da7968c 100644
+--- a/include/drivers/qti/smmu/lemans/smmu_cfg.h
++++ b/include/drivers/qti/smmu/lemans/smmu_cfg.h
+@@ -422,4 +422,24 @@
+ #define PCIE_TCU_SMMU_SPARE_REG_1_SEC_ADDR \
+ 	(PCIE_SMMU_BASE + 0x000f0030)
+ 
++/*
++ * GPU SMMU aperture for per-process page tables: the CP updates context
++ * banks 0, 1 and 2 of the GPU SMMU through it. It sits in the GPU CX
++ * domain and keeps its contents across CX collapse only with retention on.
++ */
++#define GPU_SMMU_APERTURE_BASE \
++	0x03d60000
++#define GPU_SMMU_APERTURE_CB(n) \
++	((GPU_SMMU_BASE + 0x00010000 + (n) * 0x1000) & 0x000fffff)
++#define GPU_SMMU_APERTURE_S1CB0_ADDR \
++	(GPU_SMMU_APERTURE_BASE + 0x0)
++#define GPU_SMMU_APERTURE_S1CB1_ADDR \
++	(GPU_SMMU_APERTURE_BASE + 0x4)
++#define GPU_SMMU_APERTURE_CTL \
++	0x00000002
++#define GPU_SMMU_APERTURE_CTL_ADDR \
++	(GPU_SMMU_APERTURE_BASE + 0x8)
++#define GPU_SMMU_APERTURE_S1CB6_ADDR \
++	(GPU_SMMU_APERTURE_BASE + 0xc)
++
+ #endif
+diff --git a/include/drivers/qti/smmu/smmu.h b/include/drivers/qti/smmu/smmu.h
+index 5b87a7968..b9adf3605 100644
+--- a/include/drivers/qti/smmu/smmu.h
++++ b/include/drivers/qti/smmu/smmu.h
+@@ -17,10 +17,12 @@ struct smmu_cfg_s {
+ };
+ 
+ void qti_smmu_init(void);
++void qti_smmu_clocked_init(void);
+ extern struct smmu_cfg_s qti_smmu_cfg[];
+ extern const size_t qti_smmu_cfg_count;
+ #else
+ static inline void qti_smmu_init(void) {}
++static inline void qti_smmu_clocked_init(void) {}
+ #endif
+ 
+ #endif
+diff --git a/plat/qti/common/src/qti_bl31_setup.c b/plat/qti/common/src/qti_bl31_setup.c
+index 0b2ca6f3b..17b82672a 100644
+--- a/plat/qti/common/src/qti_bl31_setup.c
++++ b/plat/qti/common/src/qti_bl31_setup.c
+@@ -134,6 +134,7 @@ void bl31_platform_setup(void)
+ 
+ 	/* xPU static config needs clocks held; bracket its init. */
+ 	qti_clock_init();
++	qti_smmu_clocked_init();
+ 	qti_accesscontrol_init();
+ 	qti_clock_init_done();
+ 

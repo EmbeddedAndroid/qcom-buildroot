@@ -195,9 +195,12 @@ SWIV_SCRIPT ?= $(CURDIR)/qcom/security/swiv_build_utility.py
 #
 #   lemans/patches/u-boot/*.patch   applied to $(U-BOOT_PATH)
 #   lemans/patches/linux/*.patch    applied to $(LINUX_PATH)
+#   lemans/patches/arm-trusted-firmware/*.patch
+#                                   applied to $(TF_A_PATH)
 ################################################################################
 U_BOOT_OVERLAY_DIR = $(CURDIR)/lemans/patches/u-boot
 LINUX_OVERLAY_DIR  = $(CURDIR)/lemans/patches/linux
+TF_A_OVERLAY_DIR   = $(CURDIR)/lemans/patches/arm-trusted-firmware
 
 # apply-overlays: $(call apply-overlays,<repo-dir>,<overlay-dir>)
 # Applies each *.patch idempotently using git-apply reverse-check to detect
@@ -218,7 +221,8 @@ define apply-overlays
 	fi
 endef
 
-.PHONY: u-boot-overlays u-boot-overlays-revert linux-overlays linux-overlays-revert
+.PHONY: u-boot-overlays u-boot-overlays-revert linux-overlays linux-overlays-revert \
+	tfa-overlays tfa-overlays-revert
 
 u-boot-overlays:
 	$(call apply-overlays,$(U-BOOT_PATH),$(U_BOOT_OVERLAY_DIR))
@@ -231,6 +235,15 @@ u-boot-overlays-revert:
 
 linux-overlays:
 	$(call apply-overlays,$(LINUX_PATH),$(LINUX_OVERLAY_DIR))
+
+tfa-overlays:
+	$(call apply-overlays,$(TF_A_PATH),$(TF_A_OVERLAY_DIR))
+
+tfa-overlays-revert:
+	@for p in $$(ls "$(TF_A_OVERLAY_DIR)"/*.patch 2>/dev/null | sort -r); do \
+		git -C "$(TF_A_PATH)" apply --reverse "$$p" 2>/dev/null && \
+			echo "reverted overlay: $$p" || true; \
+	done
 
 linux-overlays-revert:
 	@for p in $$(ls "$(LINUX_OVERLAY_DIR)"/*.patch 2>/dev/null | sort -r); do \
@@ -312,10 +325,11 @@ help:
 	@echo "                   Yocto rootfs (root=PARTLABEL=rootfs); needs flash-yocto"
 	@echo ""
 	@echo "════════════════════════════════════════════════════════════════════════"
-	@echo " SOURCE OVERLAYS  (local u-boot/linux patches under lemans/patches/)"
+	@echo " SOURCE OVERLAYS  (local u-boot/linux/TF-A patches under lemans/patches/)"
 	@echo "════════════════════════════════════════════════════════════════════════"
-	@echo "  u-boot-overlays / linux-overlays          Apply overlays (auto-run by builds)"
-	@echo "  u-boot-overlays-revert / linux-overlays-revert  Revert overlays"
+	@echo "  u-boot-overlays / linux-overlays / tfa-overlays  Apply overlays (auto-run by builds)"
+	@echo "  u-boot-overlays-revert / linux-overlays-revert / tfa-overlays-revert"
+	@echo "                                            Revert overlays"
 	@echo ""
 	@echo "════════════════════════════════════════════════════════════════════════"
 	@echo " OTHER FLASH / EDL TARGETS"
@@ -484,7 +498,7 @@ BL31_BIN_FLAT = $(TF_A_PATH)/build/lemans_evk/release/bl31.bin
 
 .PHONY: tfa tfa-clean
 
-tfa:
+tfa: tfa-overlays
 	$(TF_A_EXPORTS) $(MAKE) -C $(TF_A_PATH) -j$(shell nproc) $(TF_A_FLAGS) bl31
 
 tfa-clean:
