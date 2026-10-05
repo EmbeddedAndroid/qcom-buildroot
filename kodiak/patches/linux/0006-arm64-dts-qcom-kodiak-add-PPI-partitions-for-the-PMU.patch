@@ -1,0 +1,67 @@
+From 92ac5c831d56f66f5e36408813dd5166b5bc78d0 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Sat, 3 Oct 2026 12:13:26 -0400
+Subject: [PATCH] arm64: dts: qcom: kodiak: add PPI partitions for the PMUs
+
+The Cortex-A55 and Cortex-A78 PMU nodes both use PPI 7 without a
+partition, so each PMU driver claims all eight CPUs and only one of them
+gets the per-CPU interrupt. Overflow interrupts are lost. On the RB3
+Gen 2, a cycles sampling event with one overflow per 10^6 cycles, run
+for 2 s on CPU 0:
+
+  /sys/bus/event_source/devices/armv8_cortex_a55 cpus=0-7
+  /sys/bus/event_source/devices/armv8_cortex_a78 cpus=0-7
+  cpu 0: 2792668848 cycles, 2792 overflows expected
+
+takes 9 PMU interrupts on CPU 0. Counting works without the interrupt,
+which hid this since the single PMU node was split per core type.
+
+Add a PPI partition per cluster, cpu0-cpu3 (Cortex-A55) and cpu4-cpu7
+(Cortex-A78), and pass it in the fourth cell of each PMU interrupt.
+
+Fixes: 89f324ef54a2 ("arm64: dts: qcom: sc7280: Fix PMU nodes for Cortex A55 and A78")
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/kodiak.dtsi | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/kodiak.dtsi b/arch/arm64/boot/dts/qcom/kodiak.dtsi
+index d0066b7710bf..3aa5662b692c 100644
+--- a/arch/arm64/boot/dts/qcom/kodiak.dtsi
++++ b/arch/arm64/boot/dts/qcom/kodiak.dtsi
+@@ -858,12 +858,12 @@
+ 
+ 	pmu-a55 {
+ 		compatible = "arm,cortex-a55-pmu";
+-		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW 0>;
++		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW &ppi_cluster0>;
+ 	};
+ 
+ 	pmu-a78 {
+ 		compatible = "arm,cortex-a78-pmu";
+-		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW 0>;
++		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW &ppi_cluster1>;
+ 	};
+ 
+ 	psci: psci {
+@@ -6957,6 +6957,16 @@
+ 			#size-cells = <2>;
+ 			ranges;
+ 
++			ppi-partitions {
++				ppi_cluster0: interrupt-partition-0 {
++					affinity = <&cpu0 &cpu1 &cpu2 &cpu3>;
++				};
++
++				ppi_cluster1: interrupt-partition-1 {
++					affinity = <&cpu4 &cpu5 &cpu6 &cpu7>;
++				};
++			};
++
+ 			msi-controller@17a40000 {
+ 				compatible = "arm,gic-v3-its";
+ 				reg = <0 0x17a40000 0 0x20000>;
+-- 
+2.47.3
+

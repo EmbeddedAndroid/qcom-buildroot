@@ -124,7 +124,7 @@
     OP-TEE authenticates and starts it through the PAS pseudo-TA. With no
     hypervisor, Linux maps the firmware for the stream the video core fetches
     it with: the Kodiak EL2 overlay of the pinned kernel disables the video
-    core, and the last patch in <code>kodiak/patches/linux/</code> enables it
+    core, and patch 0004 in <code>kodiak/patches/linux/</code> enables it
     with that stream (<code>video-firmware</code>).
   </p>
   <p>
@@ -181,8 +181,10 @@
         patches in <code>kodiak/patches/linux/</code> on top: two fixes in the
         PAS remote processor code with the OP-TEE backend and one in the ADSP
         audio clock driver, without which a DSP cannot be stopped and started
-        again, and the video core enabled at EL2 (see
-        <a href="#video">Video codec</a>).</td>
+        again, the video core enabled at EL2 (see
+        <a href="#video">Video codec</a>), and one PPI partition per cluster
+        for the Cortex-A55 and Cortex-A78 PMUs (the GIC switched to four
+        interrupt cells first), so each PMU gets its overflow interrupt.</td>
         <td>arm64 <code>defconfig</code> with OP-TEE, KVM, EFI_ZBOOT, MEMTEST, the PAS
         remote processors with the OP-TEE backend, FastRPC, iris, no SMCCC SoC ID device and no modules; <code>qcom/qcs6490-rb3gen2-el2.dtb</code> (the board DTB with the
         Kodiak EL2 overlay)</td></tr>
