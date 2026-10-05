@@ -164,7 +164,9 @@ make flash-loader TZ_IMAGE=u-boot-spl</pre>
     the one that creates the firmware stream device. It also carries the
     rpmhpd change that lets the NSP0 and NSP1 votes through before
     <code>sync_state</code> (the IQ-9075 EVK NSPs crash without it); the
-    CDSP is on NSP0.
+    CDSP is on NSP0. The last two patches give the Cortex-A55 and
+    Cortex-A78C PMUs one PPI partition per cluster (the GIC switched to four
+    interrupt cells first), so each PMU gets its overflow interrupt.
   </p>
 
   <h3 id="boot-cpu">Boot CPU</h3>
