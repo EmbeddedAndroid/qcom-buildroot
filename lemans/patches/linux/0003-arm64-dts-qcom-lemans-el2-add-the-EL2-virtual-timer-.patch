@@ -1,0 +1,48 @@
+From 8121749ccebbc54c7c72622c20121db797f43bea Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Fri, 2 Oct 2026 11:26:35 -0400
+Subject: [PATCH 3/5] arm64: dts: qcom: lemans-el2: add the EL2 virtual timer
+ interrupt
+
+Linux at EL2 with VHE runs its clock on the EL2 virtual timer when the
+timer node lists that interrupt. The Lemans timer node lists four, so
+the kernel falls back to the EL2 physical timer and warns:
+
+  [Firmware Bug]: VHE-capable CPU without EL2 virtual timer interrupt
+
+and the Arm BSA PPI assignment check fails for the EL2 virtual timer.
+The SA8775P interrupt map routes the timer's EL2 virtual output to PPI
+12 (INTID 28). Under Gunyah the EL2 timers belong to the hypervisor, so
+list it in the EL2 overlay.
+
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/lemans-el2.dtso | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/lemans-el2.dtso b/arch/arm64/boot/dts/qcom/lemans-el2.dtso
+index 3efbdda9348b..d8c6440ea33b 100644
+--- a/arch/arm64/boot/dts/qcom/lemans-el2.dtso
++++ b/arch/arm64/boot/dts/qcom/lemans-el2.dtso
+@@ -10,6 +10,17 @@
+ /dts-v1/;
+ /plugin/;
+ 
++#include <dt-bindings/interrupt-controller/arm-gic.h>
++
++&arch_timer {
++	interrupt-parent = <&intc>;
++	interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW>,
++		     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW>,
++		     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW>,
++		     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW>,
++		     <GIC_PPI 12 IRQ_TYPE_LEVEL_LOW>;
++};
++
+ &gpu_zap_shader {
+ 	status = "disabled";
+ };
+-- 
+2.47.3
+

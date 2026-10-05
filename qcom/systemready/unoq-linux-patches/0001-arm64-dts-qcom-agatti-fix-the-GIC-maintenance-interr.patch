@@ -1,0 +1,40 @@
+From a48d47903a35d08f6df833d97097030cbd01a756 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Fri, 2 Oct 2026 11:10:27 -0400
+Subject: [PATCH 1/4] arm64: dts: qcom: agatti: fix the GIC maintenance
+ interrupt
+
+The GIC node lists PPI 9 (INTID 25) as the maintenance interrupt, but
+the Agatti interrupt map routes the CPU interface maintenance output
+(nVCPUMNTIRQ) to PPI 8 (INTID 24); INTID 25 is the wakeup sync line.
+KVM's vGIC therefore never sees a maintenance interrupt, and the Arm
+BSA PPI check times out on a QRB2210 board at EL2:
+
+  Interrupt not received within timeout
+  Failed at checkpoint -  4
+
+With PPI 8 the same check receives it.
+
+Fixes: a64a0192b70c ("arm64: dts: qcom: Add initial QCM2290 device tree")
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/agatti.dtsi | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/agatti.dtsi b/arch/arm64/boot/dts/qcom/agatti.dtsi
+index 75cbfabf1..cb8dcda8c 100644
+--- a/arch/arm64/boot/dts/qcom/agatti.dtsi
++++ b/arch/arm64/boot/dts/qcom/agatti.dtsi
+@@ -2787,7 +2787,7 @@ intc: interrupt-controller@f200000 {
+ 			compatible = "arm,gic-v3";
+ 			reg = <0x0 0x0f200000 0x0 0x10000>,
+ 			      <0x0 0x0f300000 0x0 0x100000>;
+-			interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
++			interrupts = <GIC_PPI 8 IRQ_TYPE_LEVEL_HIGH>;
+ 			#interrupt-cells = <3>;
+ 			interrupt-controller;
+ 			interrupt-parent = <&intc>;
+-- 
+2.47.3
+

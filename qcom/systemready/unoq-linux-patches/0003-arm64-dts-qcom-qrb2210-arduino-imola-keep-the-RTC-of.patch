@@ -1,0 +1,37 @@
+From 0bd70678674b64d3ffd1ecd78643abf6a49e3f72 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Fri, 2 Oct 2026 11:22:51 -0400
+Subject: [PATCH 3/4] arm64: dts: qcom: qrb2210-arduino-imola: keep the RTC
+ offset in RTCInfo
+
+The PM4125 RTC counter is read-only to the application processor on the
+UNO Q (the SPMI arbiter rejects the RTC_RW write with -EPERM), so the
+time can only be set as an offset to the counter, and the board has no
+nvmem cell for one. The board boots through UEFI firmware, which keeps
+the offset in the RTCInfo variable. Describe that, so Linux reads the
+time the firmware's SetTime() stored.
+
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts b/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
+index 34d62c832..0153fd3f8 100644
+--- a/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
++++ b/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
+@@ -319,6 +319,10 @@ &mdss_dsi0_phy {
+ 	status = "okay";
+ };
+ 
++&pm4125_rtc {
++	qcom,uefi-rtc-info;
++};
++
+ &pm4125_vbus {
+ 	regulator-min-microamp = <500000>;
+ 	regulator-max-microamp = <500000>;
+-- 
+2.47.3
+

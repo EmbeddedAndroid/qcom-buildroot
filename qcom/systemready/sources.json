@@ -1,0 +1,74 @@
+{
+  "vq": {
+    "linux": {
+      "source": "linux-vq",
+      "revision": "b3d0ff6f5fb33bf705fb10782af5ff8d32465adc"
+    },
+    "u-boot": {
+      "source": "uboot-vq",
+      "revision": "a0263a909d88b8f7d94ace259985aa348fc51898"
+    },
+    "arm-trusted-firmware": {
+      "source": "tfa-vq",
+      "revision": "4930db330cb03cfe2124f41bf1852cff9e7abd22"
+    },
+    "optee_os": {
+      "source": "optee-vq",
+      "revision": "573c908ba9d003fea1e1105c2c7bcc98fce363b2"
+    }
+  },
+  "kodiak": {
+    "linux": {
+      "source": "linux-kodiak",
+      "revision": "b5e84377bb7a1d0390410c5d73620b340f6a9df9"
+    },
+    "u-boot": {
+      "source": "uboot-imola",
+      "revision": "5df998928c7efff333acf1fb43aaa8fe860f0297"
+    },
+    "arm-trusted-firmware": {
+      "source": "tfa-kodiak",
+      "revision": "58bd918dce1e2831fbec252c0b2139d519a00d55"
+    },
+    "optee_os": {
+      "source": "optee-kodiak",
+      "revision": "319d204e635eef5faafb7670c8688d2bfd484519"
+    }
+  },
+  "lemans": {
+    "linux": {
+      "source": "linux-lemans",
+      "revision": "986b50717ed17c866d54d09bdd9823065e81b9f9"
+    },
+    "u-boot": {
+      "source": "uboot-lemans",
+      "revision": "105f47a146e109ea177b2aa19dd364b43ee7bc39"
+    },
+    "arm-trusted-firmware": {
+      "source": "tfa-lemans",
+      "revision": "12d255322adb618d3a6fd50a45bebd489c09e005"
+    },
+    "optee_os": {
+      "source": "optee-lemans",
+      "revision": "fb8a3337b78ca77d29cb0eb092d390be3c7595d6"
+    }
+  },
+  "unoq": {
+    "linux": {
+      "source": "linux-unoq",
+      "revision": "efe952e4fc54edb88e881e71d6ddd4653b79610f"
+    },
+    "u-boot": {
+      "source": "uboot-imola",
+      "revision": "5df998928c7efff333acf1fb43aaa8fe860f0297"
+    },
+    "arm-trusted-firmware": {
+      "source": "tfa-unoq",
+      "revision": "7ca98c47317bb3327b5d3a9b7e1e130c5ce8bb4f"
+    },
+    "optee_os": {
+      "source": "optee-unoq",
+      "revision": "1d9a795d913d3e1bc397f0133372d8b22e315fd7"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+From 127a6856690121e359950174e18a1bce2929170f Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Fri, 2 Oct 2026 11:09:21 -0400
+Subject: [PATCH 11/13] arm64: dts: qcom: monaco-el2: add the EL2 virtual timer
+ interrupt
+
+Linux at EL2 with VHE runs its clock on the EL2 virtual timer when the
+timer node lists that interrupt. The Monaco timer node lists four, so
+the kernel falls back to the EL2 physical timer and warns:
+
+  [Firmware Bug]: VHE-capable CPU without EL2 virtual timer interrupt
+
+and the Arm BSA PPI assignment check fails for the EL2 virtual timer.
+The Monaco interrupt map routes the timer's EL2 virtual output to PPI
+12 (INTID 28). Under Gunyah the EL2 timers belong to the hypervisor, so
+list it in the EL2 overlay.
+
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/monaco-el2.dtso | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/monaco-el2.dtso b/arch/arm64/boot/dts/qcom/monaco-el2.dtso
+index 7cae65ae499c..4ef287ea27e7 100644
+--- a/arch/arm64/boot/dts/qcom/monaco-el2.dtso
++++ b/arch/arm64/boot/dts/qcom/monaco-el2.dtso
+@@ -8,6 +8,8 @@
+ /dts-v1/;
+ /plugin/;
+ 
++#include <dt-bindings/interrupt-controller/arm-gic.h>
++
+ &gpu_zap_shader {
+ 	status = "disabled";
+ };
+@@ -30,3 +32,12 @@ &remoteproc_cdsp {
+ &remoteproc_gpdsp {
+ 	iommus = <&apps_smmu 0x28a0 0x0>;
+ };
++
++&{/timer} {
++	interrupt-parent = <&intc>;
++	interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW 0>,
++		     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW 0>,
++		     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW 0>,
++		     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW 0>,
++		     <GIC_PPI 12 IRQ_TYPE_LEVEL_LOW 0>;
++};
+-- 
+2.47.3
+

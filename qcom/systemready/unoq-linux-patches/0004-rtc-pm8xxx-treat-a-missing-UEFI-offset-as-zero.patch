@@ -1,0 +1,42 @@
+From efe952e4fc54edb88e881e71d6ddd4653b79610f Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Fri, 2 Oct 2026 11:48:14 -0400
+Subject: [PATCH 4/4] rtc: pm8xxx: treat a missing UEFI offset as zero
+
+With "qcom,uefi-rtc-info" the driver reads the RTC offset from the
+RTCInfo UEFI variable and fails the probe when the variable does not
+exist. U-Boot keeps the offset in RTCInfo and creates the variable on
+the first GetTime() or SetTime() call, so a system booted without one
+has no RTC:
+
+  rtc-pm8xxx ...: probe with driver rtc-pm8xxx failed with error -2
+
+A missing variable means the time was never adjusted. Use a zero offset;
+set_time() creates the variable when the firmware lets it.
+
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ drivers/rtc/rtc-pm8xxx.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/rtc/rtc-pm8xxx.c b/drivers/rtc/rtc-pm8xxx.c
+index e624f848c..399474ee9 100644
+--- a/drivers/rtc/rtc-pm8xxx.c
++++ b/drivers/rtc/rtc-pm8xxx.c
+@@ -109,6 +109,12 @@ static int pm8xxx_rtc_read_uefi_offset(struct pm8xxx_rtc *rtc_dd)
+ 				     &size, rtc_info);
+ 	efivar_unlock();
+ 
++	/* The firmware may create the variable only when the time is set. */
++	if (status == EFI_NOT_FOUND) {
++		rtc_dd->offset = 0;
++		return 0;
++	}
++
+ 	if (status != EFI_SUCCESS) {
+ 		dev_dbg(dev, "failed to read UEFI offset: %lu\n", status);
+ 		return efi_status_to_err(status);
+-- 
+2.47.3
+

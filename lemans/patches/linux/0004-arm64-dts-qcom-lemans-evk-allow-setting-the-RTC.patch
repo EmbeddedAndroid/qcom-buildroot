@@ -1,0 +1,34 @@
+From 7c9b20710c6365d34c8a016be998e255698e3262 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Fri, 2 Oct 2026 11:22:51 -0400
+Subject: [PATCH 4/5] arm64: dts: qcom: lemans-evk: allow setting the RTC
+
+The application processor can write the PMM8654AU RTC counter on the
+Lemans EVK (an RTC_RW write from the boot firmware succeeds and reads
+back), but without "allow-set-time" the driver refuses to set the time.
+Allow it.
+
+Assisted-by: Claude:claude-opus-5-5
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ arch/arm64/boot/dts/qcom/lemans-evk.dts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/lemans-evk.dts b/arch/arm64/boot/dts/qcom/lemans-evk.dts
+index ffad72c8d5c4..6bb1e08ec2ef 100644
+--- a/arch/arm64/boot/dts/qcom/lemans-evk.dts
++++ b/arch/arm64/boot/dts/qcom/lemans-evk.dts
+@@ -883,6 +883,10 @@ &pmm8654au_0_pon_resin {
+ 	status = "okay";
+ };
+ 
++&pmm8654au_0_rtc {
++	allow-set-time;
++};
++
+ &pmm8654au_2_gpios {
+ 	usb0_intr_state: usb0-intr-state {
+ 		pins = "gpio5";
+-- 
+2.47.3
+
