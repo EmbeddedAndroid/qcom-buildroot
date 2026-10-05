@@ -1,0 +1,9 @@
+# Build container for the NPU lane images: monza-video:1 (monza-build:2 plus
+# a host ffmpeg for the video test streams) plus the C++ runtime the QAIRT
+# x86 converters link (libc++1, libc++abi1), which qcom/npu/mk-npu-model.sh
+# needs to build the npu-qnn model.
+FROM monza-video:1
+RUN for try in 1 2 3 4 5; do \
+	apt-get update && apt-get install -y --no-install-recommends libc++1 libc++abi1 libatomic1 \
+	&& break; sleep 30; done \
+	&& rm -rf /var/lib/apt/lists/*

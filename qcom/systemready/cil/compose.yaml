@@ -1,0 +1,32 @@
+name: monza-sr
+
+x-runtime: &runtime
+  user: "${MONZA_UID:-1000}:${MONZA_GID:-1000}"
+  init: true
+  working_dir: /monza/src/build
+  environment:
+    HOME: /monza/.home
+    LANG: C.UTF-8
+    LC_ALL: C.UTF-8
+  volumes:
+    - ${MONZA_ROOT:-/home/ubuntu/monza}:/monza
+
+services:
+  build:
+    <<: *runtime
+    image: monza-build:2
+    build:
+      context: .
+      dockerfile: Dockerfile
+  video:
+    <<: *runtime
+    image: monza-video:1
+    build:
+      context: .
+      dockerfile: Dockerfile.video
+  npu:
+    <<: *runtime
+    image: monza-npu:1
+    build:
+      context: .
+      dockerfile: Dockerfile.npu

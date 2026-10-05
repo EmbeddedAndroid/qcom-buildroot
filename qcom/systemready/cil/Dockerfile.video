@@ -1,0 +1,10 @@
+# Build container for the video-codec images: the monza build container
+# (cil-build/Dockerfile, monza-build:2) plus a host ffmpeg with libx264,
+# libx265 and libvpx, which qcom/video/mk-video-streams.sh needs to make
+# the reference streams and their software-decode MD5s.
+FROM monza-build:2
+RUN for try in 1 2 3 4 5; do \
+	apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+	&& break; sleep 30; done \
+	&& ffmpeg -hide_banner -encoders 2>/dev/null | grep -E " (libx264|libx265|libvpx-vp9) " \
+	&& rm -rf /var/lib/apt/lists/*

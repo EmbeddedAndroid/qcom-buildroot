@@ -9,7 +9,10 @@ branch. Existing integration-20261004 sources remain unchanged.
 qcom/systemready/prepare.py selects those exact revisions from local Git
 bundles after manifest sync. A missing bundle or revision mismatch aborts
 before a build. qcom/systemready/test_prepare.py covers source selection,
-a mismatched pin and a missing bundle. Run it in the monza-build:2 container.
+a mismatched pin and a missing bundle. test_cil_setup.py checks real bundle
+imports and staging, rejects missing inputs and wrong branches, and checks
+that a failed container layer stops setup. Its Docker/systemd boundary is
+stubbed so these checks require no VM. Run both in monza-build:2.
 
 The Monaco and Kodiak timer overlays use four interrupt cells because
 these integration kernels already carry the PMU PPI partitions. UNO Q's
@@ -21,11 +24,24 @@ change set.
 ## Recreate a CIL build
 
 Use requester monza-sr-fold and the existing cil-build/request-lease.sh.
-Provision the VM with lava/npu/build/vm-setup.sh, QB_BRANCH set to
-integration-20261005-sr. Its checked-in Dockerfiles provide monza-build:2,
-monza-video:1 and monza-npu:1. Keep temporary bundles under the lane work
-folder, outside /tmp. qcom/systemready/sync.sh refreshes the build branch
-and copies the laptop component bundles to the provisioned VM.
+The VM needs Ubuntu 24.04, Git and sudo access. All compilers and build
+dependencies run in the versioned qcom/systemready/cil Docker recipes,
+which provide monza-build:2, monza-video:1 and monza-npu:1.
+
+The laptop lane must contain src/qcom-buildroot and build/bundles with
+the component bundles named by sources.json. With the lease connection
+files in ~/.ssh/cil-monza, provision and sync it from this checkout:
+
+    SR_LANE=$HOME/monza/lava/sr-fold bash qcom/systemready/sync.sh LEASE_ID
+
+The script exports this branch and the local qcom-manifest all-boards
+branch, transfers the versioned kit and component bundles, then runs
+cil/setup-vm.sh on the VM. SR_MANIFEST_REPO can select another local
+manifest checkout. Bundles stay under the lane work folder, outside /tmp.
+The setup validates its bundle inputs before provisioning, installs only
+Docker on the host, and builds the three container layers in order.
+It stages the build entry point, workspace helper and source bundles
+under ~/monza. Source selection still verifies every component revision.
 
 Run in monza-npu:1 with the VM's ~/monza mounted at /monza, as uid/gid
 1000, HOME=/monza/.home:
