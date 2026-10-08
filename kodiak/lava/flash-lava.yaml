@@ -1,10 +1,11 @@
 # LAVA job for `make flash-lava`: flash-loader + flash-kernel on a lab board.
 #
 # The tarball (kodiak/output/kodiak-flash.qcomflash.tar.gz) is flat and holds
-# the firehose programmer, tz.mbn, fip.elf, efi.bin, rawprogram0.xml (efi, LUN
-# 0) and rawprogram4.xml (tz_a/tz_b, uefi_a/uefi_b, LUN 4). The partition
-# tables and the rest of the UFS stay as they are, so the patch files are
-# empty. The UKI carries the Buildroot rootfs as its initramfs, so the board
+# the firehose programmer, the boot binaries, tz.mbn, fip.elf, efi.bin,
+# rawprogram0.xml (efi, LUN 0), rawprogram1.xml and rawprogram2.xml (XBL and
+# XBL config, LUN 1 and LUN 2) and rawprogram4.xml (the other boot binaries,
+# tz_a/tz_b, uefi_a/uefi_b, LUN 4). The partition tables and the rest of the
+# UFS stay as they are, so the patch files are empty. The UKI carries the Buildroot rootfs as its initramfs, so the board
 # reaches a login prompt whatever its rootfs partition holds.
 #
 # qcom/lava/submit.sh replaces <ARTIFACT_URL> and <ARTIFACT_TOKEN> with the
@@ -33,8 +34,8 @@ actions:
 - boot:
     method: qdl
     firehose_program: prog_firehose_ddr.elf
-    rawprogram: rawprogram0.xml rawprogram4.xml
-    patch: patch0.xml patch4.xml
+    rawprogram: rawprogram0.xml rawprogram1.xml rawprogram2.xml rawprogram4.xml
+    patch: patch0.xml patch1.xml patch2.xml patch4.xml
     storage: ufs
     debug: true
     timeout:

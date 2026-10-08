@@ -66,12 +66,11 @@ make -f agatti.mk flash-kernel  # efi partition only
 RB3 Gen 2 (Kodiak):
 
 ```sh
-make -f kodiak.mk all           # bl2.elf + fip.elf (boot chain), efi.bin (kernel + rootfs)
-make -f kodiak.mk tz-qti-sign   # tz.mbn: QTI-signed BL2 (needs QTI remote signing access)
+make -f kodiak.mk all           # tz.mbn (BL2, OEM TEST key) + fip.elf, efi.bin (kernel + rootfs)
 
-# Flash with the board in EDL mode; the UFS firehose programmer goes in
-# kodiak/input/ (see kodiak/input/README.md)
-make -f kodiak.mk flash-loader  # tz_a/tz_b + uefi_a/uefi_b
+# Flash with the board in EDL mode; the boot binaries and the UFS firehose
+# programmer come from the QCM6490 boot binaries 00142 (bootbinaries-fetch)
+make -f kodiak.mk flash-loader  # boot binaries, tz_a/tz_b + uefi_a/uefi_b
 make -f kodiak.mk flash-kernel  # efi partition only
 ```
 

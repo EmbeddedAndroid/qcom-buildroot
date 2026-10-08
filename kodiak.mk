@@ -9,8 +9,9 @@
 #
 # Outputs, in kodiak/output/:
 #   bl2.elf     TF-A BL2, the TZ image before signing
-#   tz.mbn      bl2.elf with a QTI signature (tz-qti-sign), flashed to tz_a
-#               and tz_b
+#   tz.mbn      bl2.elf signed with the sectools OEM TEST key (bootimage,
+#               tz-oem-sign) or with a QTI signature (tz-qti-sign), flashed
+#               to tz_a and tz_b
 #   fip.elf     FIP (BL31 + OP-TEE + U-Boot) wrapped in an ELF loaded at
 #               0x9fc00000 with a qtestsign test signature, flashed to
 #               uefi_a and uefi_b
@@ -23,11 +24,13 @@
 # and the GPU userspace (qcom/gpu/gpu.mk). With it the UKI is about 210 MB;
 # efi.bin holds it twice.
 #
-# XBL authenticates the TZ image with the QTI authenticator even when secure
-# boot is disabled, so a qtestsign signature is not accepted for tz.mbn.
-# tz-qti-sign signs bl2.elf through the QTI remote signing service (CASS);
-# without access to it, place a signed tz.mbn in kodiak/input/ (see its
-# README.md).
+# The XBL of the QCM6490 boot binaries 00142 verifies an OEM-signed BL2, so
+# bootimage signs bl2.elf into tz.mbn with the OEM TEST key of Qualcomm's
+# public sectools (tz-oem-sign); no Qualcomm account is needed. Older boot
+# binaries do not boot that tz.mbn, so the flash targets write the boot
+# binaries of that release (bootbinaries-fetch) with the images built here.
+# tz-qti-sign signs bl2.elf through the QTI remote signing service (CASS)
+# instead; kodiak/input/tz.mbn takes a tz.mbn signed elsewhere.
 #
 # TF-A BL31 on Kodiak links Qualcomm's QTISECLIB (libqtisec.a), the secure
 # setup library coreboot publishes for SC7280; qtiseclib-fetch downloads the
@@ -41,17 +44,21 @@
 # Main targets
 # -----------------------------------------------------------------------------
 #   all            bootimage and efi
-#   bootimage      bl2.elf and fip.elf (OP-TEE, U-Boot, TF-A)
+#   bootimage      bl2.elf, tz.mbn (tz-oem-sign) and fip.elf (OP-TEE,
+#                  U-Boot, TF-A)
+#   tz-oem-sign    tz.mbn from bl2.elf (OEM TEST key, see above)
 #   tz-qti-sign    tz.mbn from bl2.elf (QTI remote signing, see above)
 #   efi            efi.bin (Linux, Buildroot, UKI)
-#   flash-loader   write tz.mbn to tz_a/tz_b and fip.elf to uefi_a/uefi_b
+#   flash-loader   write the boot binaries, tz.mbn to tz_a/tz_b and fip.elf
+#                  to uefi_a/uefi_b
 #   flash-kernel   write efi.bin to efi
 #   flash-lava     flash-loader and flash-kernel on a LAVA lab board
 #   clean          clean all components and kodiak/output/
 #
 # Component targets: optee-os, u-boot, tfa, fip, linux-patches, linux,
 # linux-defconfig, buildroot, dsp-firmware, qtestsign-fetch, qtiseclib-fetch,
-# video-streams, and the matching *-clean targets.
+# sectools-fetch, bootbinaries-fetch, video-streams, and the matching *-clean
+# targets.
 #
 # Configurable variables (command line or environment)
 # -----------------------------------------------------------------------------
@@ -68,7 +75,7 @@
 #   LINUX_DEFCONFIG   kernel defconfig (default: defconfig)
 #   LINUX_CMDLINE     kernel command line embedded in the UKI
 #   FIREHOSE          UFS firehose programmer used by the flash targets
-#                     (default: kodiak/input/prog_firehose_ddr.elf)
+#                     (default: the one in the boot binaries)
 #   QDL, QDL_FLAGS    qdl binary and its options (default: --storage ufs)
 #   FLASH_LAVA_CONNECT
 #                     flash-lava: 1 interactive, 0 flash-only (default: ask
@@ -82,6 +89,9 @@
 #   QCOM_GPU          y to put the GPU userspace (Mesa with OpenCL, TensorFlow
 #                     Lite with its GPU delegate) in the rootfs (default: y;
 #                     see qcom/gpu/gpu.mk)
+#   OEM_SECURITY_PROFILE
+#                     tz-oem-sign security profile (default:
+#                     kodiak/security/kodiak_tzt_security_profile.xml)
 #   tz-qti-sign:      SECTOOLS, QTI_SIGN_DIR, SECURITY_PROFILE,
 #                     CASS_CAPABILITY, QTI_SIGN_SERVER_URL,
 #                     QTI_SIGN_SERVER_PORT (see the tz-qti-sign section)
@@ -215,10 +225,12 @@ help:
 	@echo ""
 	@echo "Main targets:"
 	@echo "  all            bootimage and efi"
-	@echo "  bootimage      kodiak/output/bl2.elf and fip.elf"
+	@echo "  bootimage      kodiak/output/bl2.elf, tz.mbn (OEM TEST key) and fip.elf"
+	@echo "  tz-oem-sign    kodiak/output/tz.mbn from bl2.elf (OEM TEST key)"
 	@echo "  tz-qti-sign    kodiak/output/tz.mbn from bl2.elf (QTI remote signing)"
 	@echo "  efi            kodiak/output/efi.bin (kernel UKI + Buildroot rootfs)"
-	@echo "  flash-loader   write tz.mbn and fip.elf over qdl (board in EDL)"
+	@echo "  flash-loader   write the boot binaries, tz.mbn and fip.elf over qdl"
+	@echo "                 (board in EDL)"
 	@echo "  flash-kernel   write efi.bin over qdl (board in EDL)"
 	@echo "  flash-lava     flash-loader and flash-kernel on a LAVA lab board"
 	@echo "                 (asks: interactive with the serial console, or flash-only)"
@@ -226,12 +238,13 @@ help:
 	@echo ""
 	@echo "Component targets: optee-os u-boot tfa fip linux-patches linux"
 	@echo "  linux-defconfig buildroot dsp-firmware qtestsign-fetch qtiseclib-fetch"
-	@echo "  video-streams,"
+	@echo "  sectools-fetch bootbinaries-fetch video-streams,"
 	@echo "  and the matching *-clean targets"
 	@echo ""
 	@echo "Variables: BUILD_ID TF_A_FLAGS TF_A_DEBUG QTISECLIB DSP_FW_REPO DSP_FW_REV"
 	@echo "  U_BOOT_CONFIGS U_BOOT_DEVICE_TREE LINUX_DEFCONFIG LINUX_CMDLINE FIREHOSE"
-	@echo "  QDL QDL_FLAGS FLASH_LAVA_CONNECT FLASH_LAVA_JOB QCOM_VIDEO_TEST;"
+	@echo "  QDL QDL_FLAGS FLASH_LAVA_CONNECT FLASH_LAVA_JOB QCOM_VIDEO_TEST"
+	@echo "  OEM_SECURITY_PROFILE;"
 	@echo "  tz-qti-sign: SECTOOLS QTI_SIGN_DIR SECURITY_PROFILE CASS_CAPABILITY"
 	@echo "  QTI_SIGN_SERVER_URL QTI_SIGN_SERVER_PORT"
 
@@ -354,11 +367,68 @@ fip: tfa qtestsign-fetch
 		{ echo "ERROR: fip.elf lacks $(BUILD_ID) in BL31, OP-TEE or U-Boot"; exit 1; }
 	$(call record,fip.elf)
 
-# A tz.mbn signed from an earlier bl2.elf no longer matches; tz-qti-sign
-# makes a new one.
-bootimage: fip
+# A tz.mbn signed from an earlier bl2.elf no longer matches: bootimage signs
+# the new one with the OEM TEST key (tz-qti-sign replaces it with a QTI-signed
+# one).
+bootimage: fip sectools-fetch
 	rm -f $(KODIAK_OUT)/tz.mbn
 	sed -i '/^tz.mbn /d' $(BUILD_INFO)
+	$(oem-sign)
+
+################################################################################
+# tz-oem-sign: tz.mbn from bl2.elf, signed with the OEM TEST key
+#
+# Qualcomm's sectools, from the public Qualcomm Software Center, signs
+# bl2.elf as a TZ-TEE image with its OEM TEST key and the Kodiak security
+# profile in kodiak/security/, as ldts/build-kodiak does. The XBL of the boot
+# binaries in the boot binaries section accepts the result.
+################################################################################
+SECTOOLS_VERSION     = 1.50
+SECTOOLS_URL         = https://softwarecenter.qualcomm.com/api/download/software/tools/Qualcomm_Security_Tools/All/$(SECTOOLS_VERSION).0/$(SECTOOLS_VERSION).zip
+SECTOOLS_SHA256      = 8d6694f1d184e7c204d1e1ea50447a946d7f21838cfddb48b06f0c733d700cbe
+SECTOOLS_DIR         = $(ROOT)/toolchains/sectools-$(SECTOOLS_VERSION)
+OEM_SECTOOLS         = $(SECTOOLS_DIR)/$(SECTOOLS_VERSION)/Linux/sectools
+OEM_SECURITY_PROFILE ?= $(CURDIR)/kodiak/security/kodiak_tzt_security_profile.xml
+
+.PHONY: sectools-fetch sectools-clean tz-oem-sign
+
+sectools-fetch:
+	@if [ ! -x $(OEM_SECTOOLS) ]; then \
+		mkdir -p $(SECTOOLS_DIR) && \
+		curl --retry 5 -fsSL -o $(SECTOOLS_DIR)/sectools.zip $(SECTOOLS_URL) && \
+		echo "$(SECTOOLS_SHA256)  $(SECTOOLS_DIR)/sectools.zip" | sha256sum -c && \
+		unzip -q -o $(SECTOOLS_DIR)/sectools.zip '$(SECTOOLS_VERSION)/Linux/*' \
+			-d $(SECTOOLS_DIR) && \
+		chmod +x $(OEM_SECTOOLS) && rm $(SECTOOLS_DIR)/sectools.zip || \
+		{ rm -rf $(SECTOOLS_DIR); exit 1; }; \
+	fi
+
+sectools-clean:
+	rm -rf $(SECTOOLS_DIR)
+
+# oem-sign: sign bl2.elf into tz.mbn, validate it and check that it carries
+# the BUILD_ID of bl2.elf.
+define oem-sign
+	@[ -f $(KODIAK_OUT)/bl2.elf ] || \
+		{ echo "ERROR: kodiak/output/bl2.elf missing: run 'make bootimage' first"; exit 1; }
+	rm -f $(KODIAK_OUT)/tz.mbn.tmp
+	$(OEM_SECTOOLS) secure-image $(KODIAK_OUT)/bl2.elf \
+		--outfile $(KODIAK_OUT)/tz.mbn.tmp \
+		--image-id TZ-TEE \
+		--security-profile $(OEM_SECURITY_PROFILE) \
+		--sign --signing-mode TEST
+	$(OEM_SECTOOLS) secure-image $(KODIAK_OUT)/tz.mbn.tmp --validate \
+		--image-id TZ-TEE --security-profile $(OEM_SECURITY_PROFILE)
+	id=$(call id-of,bl2.elf) && \
+		grep -aq "$$id" $(KODIAK_OUT)/tz.mbn.tmp && \
+		mv $(KODIAK_OUT)/tz.mbn.tmp $(KODIAK_OUT)/tz.mbn && \
+		sed -i '/^tz.mbn /d' $(BUILD_INFO) && \
+		echo "tz.mbn $$id" >> $(BUILD_INFO)
+	$(sha256sums)
+endef
+
+tz-oem-sign: sectools-fetch
+	$(oem-sign)
 
 ################################################################################
 # tz-qti-sign: tz.mbn from bl2.elf
@@ -651,30 +721,123 @@ efi-clean:
 	rm -f $(KODIAK_OUT)/uki.efi $(KODIAK_OUT)/efi.bin
 
 ################################################################################
-# Flashing over qdl (https://github.com/linux-msm/qdl) with the board in EDL
-# mode. The RB3 Gen 2 boots from UFS; only the tz and uefi partitions (LUN 4)
-# and the efi partition (LUN 0) are written, so XBL and the rest of the stock
-# firmware stay in place. Both A and B slots are written so the boot chain
-# cannot fall back to the stock images.
-#
-# FIREHOSE is the UFS firehose programmer shipped with the board software.
-# tz.mbn comes from kodiak/output/ (tz-qti-sign) or, when there is none, from
-# kodiak/input/. A tz.mbn from tz-qti-sign has to come from the build that
-# made fip.elf.
+# Boot binaries: XBL, XBL config, AOP and the rest of the QCM6490 boot
+# firmware of the public test-device release, with its UFS firehose
+# programmer. Release 00142 is the first whose XBL (xbl_sec) verifies an
+# OEM-signed BL2. bootbinaries-fetch downloads the release once, checks its
+# hash and unpacks it into kodiak/blobs/bootbinaries/.
 ################################################################################
-FIREHOSE  ?= $(KODIAK_IN)/prog_firehose_ddr.elf
+BOOTBIN_VERSION = 00142
+BOOTBIN_BASE    = https://softwarecenter.qualcomm.com/nexus/generic/product/chip/tech-package/QCM6490_bootbinaries.1.0/qcm6490_bootbinaries.1.0-test-device-public/$(BOOTBIN_VERSION)
+BOOTBIN_ZIP     = QCM6490_bootbinaries_$(BOOTBIN_VERSION).zip
+BOOTBIN_SHA256  = 22e45047b3349a1611d27167616dd04f08e8351120ac121f6921b47b9f709216
+BOOTBIN_DIR     = $(KODIAK_BLOBS)/bootbinaries
+BOOTBIN_STAMP   = $(BOOTBIN_DIR)/.fetched-$(BOOTBIN_VERSION)
+
+# fetch-zip <zip> <sha256>: download a boot binaries archive into
+# kodiak/blobs/, check its hash and unpack it flat into BOOTBIN_DIR.
+define fetch-zip
+	[ -f $(KODIAK_BLOBS)/$(1) ] || \
+		curl --retry 5 -fsSL -o $(KODIAK_BLOBS)/$(1) $(BOOTBIN_BASE)/$(1) || \
+		{ rm -f $(KODIAK_BLOBS)/$(1); exit 1; }
+	echo "$(2)  $(KODIAK_BLOBS)/$(1)" | sha256sum -c
+	unzip -q -j -o $(KODIAK_BLOBS)/$(1) -d $(BOOTBIN_DIR)
+endef
+
+.PHONY: bootbinaries-fetch
+
+bootbinaries-fetch: $(BOOTBIN_STAMP)
+
+$(BOOTBIN_STAMP):
+	rm -rf $(BOOTBIN_DIR)
+	mkdir -p $(BOOTBIN_DIR)
+	$(call fetch-zip,$(BOOTBIN_ZIP),$(BOOTBIN_SHA256))
+	touch $@
+
+################################################################################
+# Flashing over qdl (https://github.com/linux-msm/qdl) with the board in EDL
+# mode. The RB3 Gen 2 boots from UFS. flash-loader writes the boot binaries
+# above (XBL and XBL config on LUN 1 and LUN 2, the rest on LUN 4), tz.mbn and
+# fip.elf; flash-kernel writes the efi partition (LUN 0). The partition tables
+# and the other partitions stay as they are. Both A and B slots are written
+# so the boot chain cannot fall back to older images.
+#
+# FIREHOSE is the UFS firehose programmer of the boot binaries. tz.mbn comes
+# from kodiak/output/ (bootimage, tz-oem-sign or tz-qti-sign) or, when there
+# is none, from kodiak/input/. A tz.mbn from kodiak/output/ has to come from
+# the build that made fip.elf.
+#
+# The flash targets stage what they write in a directory with a qdl
+# rawprogram<LUN>.xml for each LUN, at the place of each partition in the
+# RB3 Gen 2 UFS layout (qcom-ptool platforms/qcs6490-rb3gen2/ufs, which the
+# board's stock image writes), and empty patch files.
+################################################################################
+FIREHOSE  ?= $(BOOTBIN_DIR)/prog_firehose_ddr.elf
 QDL       ?= qdl
 QDL_FLAGS ?= --storage ufs
 TZ_MBN     = $(firstword $(wildcard $(KODIAK_OUT)/tz.mbn $(KODIAK_IN)/tz.mbn))
+
+# <LUN>:<partition>:<first sector>:<sectors>:<image>, 4096-byte sectors
+FLASH_BOOT_PARTS = \
+	1:xbl_a:6:901:xbl.elf 1:xbl_config_a:907:128:xbl_config.elf \
+	1:xbl_b:1035:901:xbl.elf 1:xbl_config_b:1936:128:xbl_config.elf \
+	2:xbl_a:6:901:xbl.elf 2:xbl_config_a:907:128:xbl_config.elf \
+	2:xbl_b:1035:901:xbl.elf 2:xbl_config_b:1936:128:xbl_config.elf \
+	4:aop_a:6:128:aop.mbn 4:xbl_ramdump_a:16582:512:XblRamdump.elf \
+	4:hyp_a:19398:2048:hypvm.mbn 4:devcfg_a:21446:32:devcfg.mbn \
+	4:qupfw_a:21478:20:qupv3fw.elf 4:uefisecapp_a:21498:512:uefi_sec.mbn \
+	4:imagefv_a:22010:512:imagefv.elf 4:shrm_a:22522:32:shrm.elf \
+	4:multiimgoem_a:22554:8:multi_image.mbn \
+	4:aop_b:22882:128:aop.mbn 4:xbl_ramdump_b:39458:512:XblRamdump.elf \
+	4:hyp_b:42274:2048:hypvm.mbn 4:devcfg_b:44322:32:devcfg.mbn \
+	4:qupfw_b:44354:20:qupv3fw.elf 4:uefisecapp_b:44374:512:uefi_sec.mbn \
+	4:imagefv_b:44886:512:imagefv.elf 4:shrm_b:45398:32:shrm.elf \
+	4:multiimgoem_b:45430:8:multi_image.mbn \
+	4:toolsfv:66151:256:tools.fv
+FLASH_LOADER_PARTS = $(FLASH_BOOT_PARTS) \
+	4:uefi_a:17094:1280:fip.elf 4:tz_a:18374:1024:tz.mbn \
+	4:uefi_b:39970:1280:fip.elf 4:tz_b:41250:1024:tz.mbn
+FLASH_KERNEL_PARTS = 0:efi:6:131072:efi.bin
+FLASH_LOADER_DIR   = $(KODIAK_OUT)/flash-loader
+
+# flash-dir <directory> <parts>: stage the firehose programmer, the images of
+# <parts> and a rawprogram<LUN>.xml and an empty patch<LUN>.xml per LUN.
+define flash-dir
+	rm -rf $(1)
+	mkdir -p $(1)
+	cp $(FIREHOSE) $(1)/prog_firehose_ddr.elf
+	cd $(1) && for p in $(2); do \
+		f=$${p##*:}; \
+		case $$f in \
+		tz.mbn) src=$(TZ_MBN) ;; \
+		fip.elf|efi.bin) src=$(KODIAK_OUT)/$$f ;; \
+		*) src=$(BOOTBIN_DIR)/$$f ;; \
+		esac; \
+		[ -f $$f ] || cp $$src $$f || exit 1; \
+	done
+	cd $(1) && for lun in $$(for p in $(2); do echo $${p%%:*}; done | sort -u); do { \
+		echo '<?xml version="1.0" ?>'; \
+		echo '<data>'; \
+		for p in $(2); do \
+			set -- $$(echo $$p | tr : ' '); \
+			[ $$1 = $$lun ] || continue; \
+			[ $$(stat -c %s $$5) -le $$(($$4 * 4096)) ] || \
+				{ echo "ERROR: $$5 does not fit in $$2" >&2; exit 1; }; \
+			echo "  <program SECTOR_SIZE_IN_BYTES=\"4096\" file_sector_offset=\"0\" filename=\"$$5\" label=\"$$2\" num_partition_sectors=\"$$4\" physical_partition_number=\"$$1\" sparse=\"false\" start_sector=\"$$3\"/>"; \
+		done; \
+		echo '</data>'; \
+	} > rawprogram$$lun.xml || exit 1; \
+	printf '<?xml version="1.0" ?>\n<patches>\n</patches>\n' > patch$$lun.xml; done
+endef
 
 .PHONY: flash-loader flash-kernel
 
 # The inputs of flash-loader and flash-kernel (and flash-lava).
 define check-loader
 	@[ -f "$(FIREHOSE)" ] || \
-		{ echo "ERROR: firehose programmer $(FIREHOSE) missing (see kodiak/input/README.md)"; exit 1; }
+		{ echo "ERROR: firehose programmer $(FIREHOSE) missing: run 'make bootbinaries-fetch' or set FIREHOSE"; exit 1; }
 	@[ -n "$(TZ_MBN)" ] || \
-		{ echo "ERROR: no tz.mbn: run 'make tz-qti-sign' or place a signed tz.mbn in kodiak/input/"; exit 1; }
+		{ echo "ERROR: no tz.mbn: run 'make bootimage' or place a signed tz.mbn in kodiak/input/"; exit 1; }
 	@[ -f $(KODIAK_OUT)/fip.elf ] || \
 		{ echo "ERROR: kodiak/output/fip.elf missing: run 'make bootimage' first"; exit 1; }
 	@[ "$(TZ_MBN)" != "$(KODIAK_OUT)/tz.mbn" ] || \
@@ -685,18 +848,19 @@ endef
 
 define check-kernel
 	@[ -f "$(FIREHOSE)" ] || \
-		{ echo "ERROR: firehose programmer $(FIREHOSE) missing (see kodiak/input/README.md)"; exit 1; }
+		{ echo "ERROR: firehose programmer $(FIREHOSE) missing: run 'make bootbinaries-fetch' or set FIREHOSE"; exit 1; }
 	@[ -f $(KODIAK_OUT)/efi.bin ] || \
 		{ echo "ERROR: kodiak/output/efi.bin missing: run 'make efi' first"; exit 1; }
 endef
 
-flash-loader:
+flash-loader: bootbinaries-fetch
 	$(check-loader)
-	$(QDL) $(QDL_FLAGS) $(FIREHOSE) \
-		write tz_a $(TZ_MBN) write tz_b $(TZ_MBN) \
-		write uefi_a $(KODIAK_OUT)/fip.elf write uefi_b $(KODIAK_OUT)/fip.elf
+	$(call flash-dir,$(FLASH_LOADER_DIR),$(FLASH_LOADER_PARTS))
+	cd $(FLASH_LOADER_DIR) && $(QDL) $(QDL_FLAGS) prog_firehose_ddr.elf \
+		rawprogram1.xml rawprogram2.xml rawprogram4.xml \
+		patch1.xml patch2.xml patch4.xml
 
-flash-kernel:
+flash-kernel: bootbinaries-fetch
 	$(check-kernel)
 	$(QDL) $(QDL_FLAGS) $(FIREHOSE) write efi $(KODIAK_OUT)/efi.bin
 
@@ -706,12 +870,9 @@ flash-kernel:
 #
 # LAVA fetches a flat qcomflash tarball over HTTP and runs qdl next to the
 # board (deploy to qdl, boot method qdl, storage ufs). flash-lava writes what
-# flash-loader and flash-kernel write: tz_a, tz_b, uefi_a, uefi_b and efi.
-# LAVA passes qdl rawprogram files, not partition names, so the tarball
-# carries rawprogram0.xml (LUN 0) and rawprogram4.xml (LUN 4) with the sectors
-# of those partitions in the RB3 Gen 2 UFS layout (qcom-ptool
-# platforms/qcs6490-rb3gen2/ufs, which the board's stock image writes), and
-# empty patch files. qcom/lava/submit.sh then uploads the tarball and flashes
+# flash-loader and flash-kernel write: the tarball carries their images, the
+# firehose programmer, rawprogram0.xml, rawprogram1.xml, rawprogram2.xml and
+# rawprogram4.xml and empty patch files. qcom/lava/submit.sh then uploads the tarball and flashes
 # a board, either interactively (qcom/lava/connect.sh reserves a board,
 # flashes it and opens its serial console; Ctrl+D releases it) or with a
 # one-shot job that boots it to a login prompt (FLASH_LAVA_CONNECT=0, the
@@ -723,37 +884,14 @@ FLASH_LAVA_TARBALL = $(KODIAK_OUT)/kodiak-flash.qcomflash.tar.gz
 FLASH_LAVA_JOB    ?= $(CURDIR)/kodiak/lava/flash-lava.yaml
 FLASH_LAVA_SUBMIT  = $(CURDIR)/qcom/lava/submit.sh
 
-# <LUN>:<partition>:<first sector>:<sectors>:<image>, 4096-byte sectors
-FLASH_LAVA_PARTS = \
-	4:uefi_a:17094:1280:fip.elf 4:tz_a:18374:1024:tz.mbn \
-	4:uefi_b:39970:1280:fip.elf 4:tz_b:41250:1024:tz.mbn \
-	0:efi:6:131072:efi.bin
-
 .PHONY: flash-lava flash-lava-package
 
 flash-lava: flash-lava-package
 	$(FLASH_LAVA_SUBMIT) $(FLASH_LAVA_TARBALL) $(FLASH_LAVA_JOB)
 
-flash-lava-package:
+flash-lava-package: bootbinaries-fetch
 	$(check-loader)
 	$(check-kernel)
-	rm -rf $(FLASH_LAVA_DIR)
-	mkdir -p $(FLASH_LAVA_DIR)
-	cp $(FIREHOSE) $(FLASH_LAVA_DIR)/prog_firehose_ddr.elf
-	cp $(TZ_MBN) $(FLASH_LAVA_DIR)/tz.mbn
-	cp $(KODIAK_OUT)/fip.elf $(KODIAK_OUT)/efi.bin $(FLASH_LAVA_DIR)/
-	cd $(FLASH_LAVA_DIR) && for lun in 0 4; do { \
-		echo '<?xml version="1.0" ?>'; \
-		echo '<data>'; \
-		for p in $(FLASH_LAVA_PARTS); do \
-			set -- $$(echo $$p | tr : ' '); \
-			[ $$1 = $$lun ] || continue; \
-			[ $$(stat -c %s $$5) -le $$(($$4 * 4096)) ] || \
-				{ echo "ERROR: $$5 does not fit in $$2" >&2; exit 1; }; \
-			echo "  <program SECTOR_SIZE_IN_BYTES=\"4096\" file_sector_offset=\"0\" filename=\"$$5\" label=\"$$2\" num_partition_sectors=\"$$4\" physical_partition_number=\"$$1\" sparse=\"false\" start_sector=\"$$3\"/>"; \
-		done; \
-		echo '</data>'; \
-	} > rawprogram$$lun.xml || exit 1; \
-	printf '<?xml version="1.0" ?>\n<patches>\n</patches>\n' > patch$$lun.xml; done
+	$(call flash-dir,$(FLASH_LAVA_DIR),$(FLASH_LOADER_PARTS) $(FLASH_KERNEL_PARTS))
 	tar -czf $(FLASH_LAVA_TARBALL) -C $(FLASH_LAVA_DIR) .
 	@echo "LAVA flash tarball: $(FLASH_LAVA_TARBALL)"

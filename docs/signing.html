@@ -30,6 +30,7 @@
     <tr><th>Board</th><th>TZ stage</th><th>Loads the rest from</th></tr>
     <tr><td>IQ-9075 EVK</td><td>U-Boot SPL</td><td>The FIT image in the uefi partition (<code>SPL_LOAD_FIT</code>, <code>SPL_ATF</code>)</td></tr>
     <tr><td>VENTUNO Q</td><td>TF-A BL2, or U-Boot SPL with <code>TZ_IMAGE=u-boot-spl</code></td><td>The FIP, or for SPL a FIT, which XBL loads from the uefi partition (see <a href="ventuno-q.html#tz-stage">the TZ stage</a>)</td></tr>
+    <tr><td>RB3 Gen 2</td><td>TF-A BL2</td><td>The FIP, which XBL loads from the uefi partition</td></tr>
   </table>
 
   <h2 id="swiv">SWIV segment</h2>
@@ -73,6 +74,23 @@
     signed this way before flashing.
   </p>
 
+  <h2 id="oem-test">OEM TEST signing</h2>
+  <p>
+    On Kodiak, the XBL of the QCM6490 boot binaries 00142 verifies a TZ image
+    signed with the OEM TEST key that Qualcomm <code>sectools</code> carries.
+    <code>kodiak.mk</code> downloads <code>sectools</code> 1.50 from the public
+    Qualcomm Software Center, checks its SHA-256 and signs BL2 in
+    <code>make bootimage</code>:
+  </p>
+<pre>sectools secure-image bl2.elf --outfile tz.mbn --image-id TZ-TEE \
+     --security-profile kodiak/security/kodiak_tzt_security_profile.xml \
+     --sign --signing-mode TEST</pre>
+  <p>
+    No Qualcomm account or signing service is needed. Older boot binaries do
+    not boot this image, so the Kodiak flash targets write the 00142 boot
+    binaries with it.
+  </p>
+
   <h2 id="per-board">What each board needs</h2>
   <table class="rtd-table">
     <tr><th>Board</th><th>TZ image</th><th>uefi image</th><th>Target</th></tr>
@@ -84,6 +102,10 @@
         <td>TF-A BL2 or U-Boot SPL + SWIV, QTI signature (<code>sectools</code>, QTI remote signing)</td>
         <td>FIP, or FIT for SPL, in an ELF, qtestsign (<code>-v6 aboot</code>, by TF-A's <code>generate_fip_elf.sh</code>); XBL loads it</td>
         <td><code>make tz-qti-sign</code>; the uefi image is signed by <code>make bootimage</code></td></tr>
+    <tr><td>RB3 Gen 2</td>
+        <td>TF-A BL2, OEM TEST signature (<code>sectools</code>, TZ-TEE); a QTI signature with <code>make tz-qti-sign</code></td>
+        <td>FIP in an ELF, qtestsign (<code>generate_fip_elf.sh</code>); XBL loads it</td>
+        <td><code>make bootimage</code></td></tr>
   </table>
 
 </main>
