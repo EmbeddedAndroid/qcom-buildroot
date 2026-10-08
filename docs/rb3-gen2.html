@@ -226,7 +226,8 @@ make all                         # bl2.elf, tz.mbn, fip.elf, efi.bin in kodiak/o
   <h2 id="flash">Flash</h2>
   <p>
     <code>bootbinaries-fetch</code> (run by the flash targets) downloads the
-    QCM6490 boot binaries 00142 from the Qualcomm Software Center, checks their
+    QCM6490 boot binaries 00142 from the Qualcomm Software Center, with the
+    immutable companion archive that carries <code>cpucp.elf</code>, checks their
     SHA-256 and unpacks them into <code>kodiak/blobs/bootbinaries/</code>; the
     UFS firehose programmer comes from there (or set <code>FIREHOSE</code>). The
     flash targets stage the images with a qdl <code>rawprogram&lt;LUN&gt;.xml</code>
@@ -236,7 +237,7 @@ make all                         # bl2.elf, tz.mbn, fip.elf, efi.bin in kodiak/o
   </p>
 <pre>make flash-loader    # xbl_a/b, xbl_config_a/b (LUN 1, LUN 2), aop, xbl_ramdump,
                      # hyp, devcfg, qupfw, uefisecapp, imagefv, shrm,
-                     # multiimgoem (A and B), toolsfv &lt;- boot binaries;
+                     # multiimgoem, cpucp (A and B), toolsfv &lt;- boot binaries;
                      # tz_a, tz_b &lt;- tz.mbn; uefi_a, uefi_b &lt;- fip.elf
 make flash-kernel    # efi &lt;- efi.bin</pre>
   <p>which run:</p>

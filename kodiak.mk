@@ -724,13 +724,18 @@ efi-clean:
 # Boot binaries: XBL, XBL config, AOP and the rest of the QCM6490 boot
 # firmware of the public test-device release, with its UFS firehose
 # programmer. Release 00142 is the first whose XBL (xbl_sec) verifies an
-# OEM-signed BL2. bootbinaries-fetch downloads the release once, checks its
-# hash and unpacks it into kodiak/blobs/bootbinaries/.
+# OEM-signed BL2. cpucp.elf is not in the main archive: it ships in the
+# immutable companion archive of the same release, which meta-qcom's
+# firmware-qcom-boot-qcs6490 recipe deploys with it. bootbinaries-fetch
+# downloads both once, checks their hashes and unpacks them into
+# kodiak/blobs/bootbinaries/.
 ################################################################################
 BOOTBIN_VERSION = 00142
 BOOTBIN_BASE    = https://softwarecenter.qualcomm.com/nexus/generic/product/chip/tech-package/QCM6490_bootbinaries.1.0/qcm6490_bootbinaries.1.0-test-device-public/$(BOOTBIN_VERSION)
 BOOTBIN_ZIP     = QCM6490_bootbinaries_$(BOOTBIN_VERSION).zip
 BOOTBIN_SHA256  = 22e45047b3349a1611d27167616dd04f08e8351120ac121f6921b47b9f709216
+BOOTBIN_IMM_ZIP    = QCM6490_bootbinaries_immutable_$(BOOTBIN_VERSION).zip
+BOOTBIN_IMM_SHA256 = a5f48c1646eb640377b66fa13064f2efe6f667e60f714b0e06c34dc66b7c94fb
 BOOTBIN_DIR     = $(KODIAK_BLOBS)/bootbinaries
 BOOTBIN_STAMP   = $(BOOTBIN_DIR)/.fetched-$(BOOTBIN_VERSION)
 
@@ -752,6 +757,7 @@ $(BOOTBIN_STAMP):
 	rm -rf $(BOOTBIN_DIR)
 	mkdir -p $(BOOTBIN_DIR)
 	$(call fetch-zip,$(BOOTBIN_ZIP),$(BOOTBIN_SHA256))
+	$(call fetch-zip,$(BOOTBIN_IMM_ZIP),$(BOOTBIN_IMM_SHA256))
 	touch $@
 
 ################################################################################
@@ -787,12 +793,12 @@ FLASH_BOOT_PARTS = \
 	4:hyp_a:19398:2048:hypvm.mbn 4:devcfg_a:21446:32:devcfg.mbn \
 	4:qupfw_a:21478:20:qupv3fw.elf 4:uefisecapp_a:21498:512:uefi_sec.mbn \
 	4:imagefv_a:22010:512:imagefv.elf 4:shrm_a:22522:32:shrm.elf \
-	4:multiimgoem_a:22554:8:multi_image.mbn \
+	4:multiimgoem_a:22554:8:multi_image.mbn 4:cpucp_a:22562:256:cpucp.elf \
 	4:aop_b:22882:128:aop.mbn 4:xbl_ramdump_b:39458:512:XblRamdump.elf \
 	4:hyp_b:42274:2048:hypvm.mbn 4:devcfg_b:44322:32:devcfg.mbn \
 	4:qupfw_b:44354:20:qupv3fw.elf 4:uefisecapp_b:44374:512:uefi_sec.mbn \
 	4:imagefv_b:44886:512:imagefv.elf 4:shrm_b:45398:32:shrm.elf \
-	4:multiimgoem_b:45430:8:multi_image.mbn \
+	4:multiimgoem_b:45430:8:multi_image.mbn 4:cpucp_b:45438:256:cpucp.elf \
 	4:toolsfv:66151:256:tools.fv
 FLASH_LOADER_PARTS = $(FLASH_BOOT_PARTS) \
 	4:uefi_a:17094:1280:fip.elf 4:tz_a:18374:1024:tz.mbn \
