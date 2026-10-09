@@ -27,8 +27,8 @@
       "revision": "5df998928c7efff333acf1fb43aaa8fe860f0297"
     },
     "arm-trusted-firmware": {
-      "source": "tfa-kodiak",
-      "revision": "58bd918dce1e2831fbec252c0b2139d519a00d55"
+      "source": "tfa-kodiak-native",
+      "revision": "65935c4e7f44e918073d63aa762d71855b7a9838"
     },
     "optee_os": {
       "source": "optee-kodiak",
