@@ -32,9 +32,10 @@
 # tz-qti-sign signs bl2.elf through the QTI remote signing service (CASS)
 # instead; kodiak/input/tz.mbn takes a tz.mbn signed elsewhere.
 #
-# TF-A BL31 on Kodiak links Qualcomm's QTISECLIB (libqtisec.a), the secure
-# setup library coreboot publishes for SC7280; qtiseclib-fetch downloads the
-# pinned release and checks its hash.
+# TF-A BL31 runs its native Kodiak drivers. QTISECLIB=<libqtisec.a> links
+# Qualcomm's QTISECLIB, the secure setup library coreboot publishes for
+# SC7280, in their place; qtiseclib-fetch downloads the pinned release to
+# kodiak/blobs/libqtisec.a and checks its hash.
 #
 # Every invocation stamps BUILD_ID into each component it builds: the TF-A
 # build string, the OP-TEE version, the U-Boot and Linux versions and the
@@ -65,7 +66,8 @@
 #   BUILD_ID          build identifier (default: kodiak-<UTC date-time>)
 #   TF_A_FLAGS        TF-A make flags (default: PLAT=rb3gen2 SPD=opteed)
 #   TF_A_DEBUG        1 for a TF-A debug build (default: 0)
-#   QTISECLIB         libqtisec.a (default: kodiak/blobs/libqtisec.a, fetched)
+#   QTISECLIB         libqtisec.a for TF-A to link (default: none, native
+#                     drivers; see qtiseclib-fetch)
 #   DSP_FW_REPO, DSP_FW_REV
 #                     linux-firmware repository and revision of the DSP
 #                     firmware (see the dsp-firmware section)
@@ -288,24 +290,25 @@ u-boot-clean:
 ################################################################################
 # QTISECLIB: Qualcomm's secure setup library for SC7280 (QTISECLIB.CB.1.0
 # release 00069), from the coreboot qc_blobs repository at a fixed commit,
-# under its own license (LICENSE next to it in qc_blobs). TF-A BL31 links it
-# for the rb3gen2 platform; without it TF-A builds a stub that does not boot.
+# under its own license (LICENSE next to it in qc_blobs). Not needed: TF-A
+# BL31 links it in place of its native drivers only when QTISECLIB is set.
 ################################################################################
 QTISECLIB_REV    = 33cc4f2fd8d9529c4231564d7a30a00c06b213de
 QTISECLIB_URL    = https://raw.githubusercontent.com/coreboot/qc_blobs/$(QTISECLIB_REV)/sc7280/qtiseclib
 QTISECLIB_SHA256 = 6860dda0701c8709530608cc0e5a61b76484ae16cb673ba9a23510cf4b3d57bf
-QTISECLIB       ?= $(KODIAK_BLOBS)/libqtisec.a
+QTISECLIB_BLOB   = $(KODIAK_BLOBS)/libqtisec.a
+QTISECLIB       ?=
 
 .PHONY: qtiseclib-fetch qtiseclib-clean
 
 qtiseclib-fetch:
-	@if [ ! -f $(QTISECLIB) ]; then \
-		mkdir -p $(dir $(QTISECLIB)) && \
+	@if [ ! -f $(QTISECLIB_BLOB) ]; then \
+		mkdir -p $(KODIAK_BLOBS) && \
 		for f in libqtisec.a LICENSE Release_Notes.txt; do \
-			curl --retry 5 -fsSL -o $(dir $(QTISECLIB))$$f $(QTISECLIB_URL)/$$f || exit 1; \
+			curl --retry 5 -fsSL -o $(KODIAK_BLOBS)/$$f $(QTISECLIB_URL)/$$f || exit 1; \
 		done; \
 	fi
-	echo "$(QTISECLIB_SHA256)  $(QTISECLIB)" | sha256sum -c
+	echo "$(QTISECLIB_SHA256)  $(QTISECLIB_BLOB)" | sha256sum -c
 
 qtiseclib-clean:
 	rm -rf $(KODIAK_BLOBS)
@@ -321,12 +324,12 @@ TF_A_BUILD  = $(TF_A_PATH)/build/rb3gen2/$(if $(filter 1,$(TF_A_DEBUG)),debug,re
 
 # TF-A does not rebuild when only BUILD_STRING changes; drop the objects that
 # embed it so each build carries its own BUILD_ID.
-tfa: optee-os u-boot qtiseclib-fetch | $(KODIAK_OUT)
+tfa: optee-os u-boot | $(KODIAK_OUT)
 	rm -f $(TF_A_BUILD)/bl2/bl_common.o $(TF_A_BUILD)/bl2/bl2_main.o \
 	      $(TF_A_BUILD)/bl31/bl_common.o $(TF_A_BUILD)/bl31/bl31_main.o
 	CROSS_COMPILE="$(AARCH64_CROSS_COMPILE)" $(MAKE) -C $(TF_A_PATH) \
 		-j$(shell nproc) $(TF_A_FLAGS) DEBUG=$(TF_A_DEBUG) \
-		QTISECLIB_PATH=$(QTISECLIB) BUILD_STRING=$(BUILD_ID) \
+		$(if $(QTISECLIB),QTISECLIB_PATH=$(QTISECLIB)) BUILD_STRING=$(BUILD_ID) \
 		BL32=$(BL32_BIN) BL33=$(U_BOOT_BIN) fip all
 	cp $(TF_A_BUILD)/bl2/bl2.elf $(KODIAK_OUT)/bl2.elf
 	grep -aq '$(BUILD_ID)' $(KODIAK_OUT)/bl2.elf || \

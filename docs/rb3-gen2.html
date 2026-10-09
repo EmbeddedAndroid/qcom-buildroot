@@ -50,7 +50,7 @@
     <tr><th>Stage</th><th>Address</th><th>Notes</th></tr>
     <tr><td>TF-A BL2</td><td><code>0x1c00e000</code></td><td>pIMEM</td></tr>
     <tr><td>FIP ELF</td><td><code>0x9fc00000</code></td><td>Loaded by XBL from <code>uefi</code></td></tr>
-    <tr><td>TF-A BL31</td><td><code>0x1c200000</code></td><td>Links QTISECLIB, below</td></tr>
+    <tr><td>TF-A BL31</td><td><code>0x1c200000</code></td><td>Native Kodiak drivers, below</td></tr>
     <tr><td>OP-TEE</td><td><code>0x1c300000</code></td><td><code>PLATFORM=qcom-kodiak</code></td></tr>
     <tr><td>U-Boot</td><td><code>0x9f800000</code></td><td><code>qcom_defconfig</code>, RB3 Gen 2 device tree</td></tr>
   </table>
@@ -65,13 +65,15 @@
 
   <h2 id="qtiseclib">QTISECLIB</h2>
   <p>
-    TF-A BL31 on Kodiak links QTISECLIB (<code>libqtisec.a</code>), Qualcomm's
-    secure setup library for SC7280, which coreboot publishes in its
+    TF-A BL31 runs its native Kodiak drivers: PSCI, CPUCP, command DB, PDC,
+    access control, SMMU, sec_core, QTimer and watchdog. CPU idle is WFI
+    standby only. <code>QTISECLIB=&lt;path&gt;</code> links QTISECLIB
+    (<code>libqtisec.a</code>), Qualcomm's secure setup library for SC7280,
+    which coreboot publishes in its
     <a href="https://github.com/coreboot/qc_blobs/tree/master/sc7280/qtiseclib">qc_blobs</a>
-    repository under its own license. Without it TF-A builds a stub that does not
-    boot. <code>qtiseclib-fetch</code> (a prerequisite of <code>tfa</code>) downloads
-    release 00069 at a fixed qc_blobs commit into <code>kodiak/blobs/</code> and
-    checks its SHA-256; <code>QTISECLIB=&lt;path&gt;</code> uses another copy.
+    repository under its own license, in their place.
+    <code>qtiseclib-fetch</code> downloads release 00069 at a fixed qc_blobs
+    commit into <code>kodiak/blobs/</code> and checks its SHA-256.
   </p>
 
   <h2 id="dsp">DSPs</h2>
@@ -166,7 +168,7 @@
   <table class="rtd-table">
     <tr><th>Tree</th><th>Pinned revision</th><th>Build</th></tr>
     <tr><td>TF-A</td><td>Upstream master.</td>
-        <td><code>PLAT=rb3gen2 SPD=opteed QTISECLIB_PATH=...</code>, <code>bl2</code> and <code>fip</code></td></tr>
+        <td><code>PLAT=rb3gen2 SPD=opteed</code>, <code>bl2</code> and <code>fip</code></td></tr>
     <tr><td>OP-TEE</td><td>Upstream master.</td>
         <td><code>PLATFORM=qcom-kodiak</code> with the PAS pseudo-TA, log level 2 (prints the version)</td></tr>
     <tr><td>U-Boot</td><td>U-Boot next with the OP-TEE library enabled by
