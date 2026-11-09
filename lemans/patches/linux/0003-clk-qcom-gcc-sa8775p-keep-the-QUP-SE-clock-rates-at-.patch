@@ -1,0 +1,239 @@
+From 7878a1c413bfbd46b783d52e38f7104582933d73 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Mon, 9 Nov 2026 13:47:04 +0000
+Subject: [PATCH 2/3] clk: qcom: gcc-sa8775p: keep the QUP SE clock rates at
+ registration
+
+The QUP serial engine RCGs use clk_rcg2_shared_ops, whose init parks
+an RCG on the XO safe source when the clock controller registers it.
+That is harmless for the serial engines Linux drives, whose drivers set
+their rate before use, but it breaks a serial engine that another
+exception level owns and that firmware set up. Under Xen the debug UART
+(QUP1 SE3) is the hypervisor console and is hidden from the hardware
+domain; once GCC registers in dom0, gcc_qupv3_wrap1_s3_clk_src runs
+from XO, the UART baud generator is off and every later console byte
+is garbage. On the Lemans EVK the console turns to noise right after
+
+  [    5.719058] Found an unknown type of DRAM info struct (size = 216)
+
+in every dom0 boot. Keeping GCC from probing in dom0 (by disabling the
+RPMh power domain provider it depends on) keeps the console intact,
+while keeping the CX vote, protecting the UART's branch clock and
+disabling the whole QUP1 wrapper do not; the parked RCG sits behind the
+branch clock.
+
+Use clk_rcg2_shared_no_init_park_ops for the QUP serial engine RCGs,
+as gcc-eliza, gcc-glymur and gcc-kaanapali do, so registration leaves
+the rate that firmware programmed. With this change dom0 boots to a
+login prompt on the Xen console.
+
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ drivers/clk/qcom/gcc-sa8775p.c | 44 +++++++++++++++++-----------------
+ 1 file changed, 22 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/clk/qcom/gcc-sa8775p.c b/drivers/clk/qcom/gcc-sa8775p.c
+index e7425e82c54f2..d9d0bd4761266 100644
+--- a/drivers/clk/qcom/gcc-sa8775p.c
++++ b/drivers/clk/qcom/gcc-sa8775p.c
+@@ -893,7 +893,7 @@ static struct clk_init_data gcc_qupv3_wrap0_s0_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap0_s0_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap0_s0_clk_src = {
+@@ -909,7 +909,7 @@ static struct clk_init_data gcc_qupv3_wrap0_s1_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap0_s1_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap0_s1_clk_src = {
+@@ -939,7 +939,7 @@ static struct clk_init_data gcc_qupv3_wrap0_s2_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap0_s2_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap0_s2_clk_src = {
+@@ -955,7 +955,7 @@ static struct clk_init_data gcc_qupv3_wrap0_s3_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap0_s3_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap0_s3_clk_src = {
+@@ -971,7 +971,7 @@ static struct clk_init_data gcc_qupv3_wrap0_s4_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap0_s4_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap0_s4_clk_src = {
+@@ -987,7 +987,7 @@ static struct clk_init_data gcc_qupv3_wrap0_s5_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap0_s5_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap0_s5_clk_src = {
+@@ -1003,7 +1003,7 @@ static struct clk_init_data gcc_qupv3_wrap0_s6_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap0_s6_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap0_s6_clk_src = {
+@@ -1019,7 +1019,7 @@ static struct clk_init_data gcc_qupv3_wrap1_s0_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap1_s0_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap1_s0_clk_src = {
+@@ -1035,7 +1035,7 @@ static struct clk_init_data gcc_qupv3_wrap1_s1_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap1_s1_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap1_s1_clk_src = {
+@@ -1051,7 +1051,7 @@ static struct clk_init_data gcc_qupv3_wrap1_s2_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap1_s2_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap1_s2_clk_src = {
+@@ -1067,7 +1067,7 @@ static struct clk_init_data gcc_qupv3_wrap1_s3_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap1_s3_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap1_s3_clk_src = {
+@@ -1083,7 +1083,7 @@ static struct clk_init_data gcc_qupv3_wrap1_s4_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap1_s4_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap1_s4_clk_src = {
+@@ -1099,7 +1099,7 @@ static struct clk_init_data gcc_qupv3_wrap1_s5_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap1_s5_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap1_s5_clk_src = {
+@@ -1115,7 +1115,7 @@ static struct clk_init_data gcc_qupv3_wrap1_s6_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap1_s6_clk_src",
+ 	.parent_data = gcc_parent_data_0,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_0),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap1_s6_clk_src = {
+@@ -1131,7 +1131,7 @@ static struct clk_init_data gcc_qupv3_wrap2_s0_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap2_s0_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap2_s0_clk_src = {
+@@ -1147,7 +1147,7 @@ static struct clk_init_data gcc_qupv3_wrap2_s1_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap2_s1_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap2_s1_clk_src = {
+@@ -1163,7 +1163,7 @@ static struct clk_init_data gcc_qupv3_wrap2_s2_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap2_s2_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap2_s2_clk_src = {
+@@ -1179,7 +1179,7 @@ static struct clk_init_data gcc_qupv3_wrap2_s3_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap2_s3_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap2_s3_clk_src = {
+@@ -1195,7 +1195,7 @@ static struct clk_init_data gcc_qupv3_wrap2_s4_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap2_s4_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap2_s4_clk_src = {
+@@ -1211,7 +1211,7 @@ static struct clk_init_data gcc_qupv3_wrap2_s5_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap2_s5_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap2_s5_clk_src = {
+@@ -1227,7 +1227,7 @@ static struct clk_init_data gcc_qupv3_wrap2_s6_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap2_s6_clk_src",
+ 	.parent_data = gcc_parent_data_1,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_1),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap2_s6_clk_src = {
+@@ -1259,7 +1259,7 @@ static struct clk_init_data gcc_qupv3_wrap3_s0_clk_src_init = {
+ 	.name = "gcc_qupv3_wrap3_s0_clk_src",
+ 	.parent_data = gcc_parent_data_4,
+ 	.num_parents = ARRAY_SIZE(gcc_parent_data_4),
+-	.ops = &clk_rcg2_shared_ops,
++	.ops = &clk_rcg2_shared_no_init_park_ops,
+ };
+ 
+ static struct clk_rcg2 gcc_qupv3_wrap3_s0_clk_src = {
+-- 
+2.47.3
+

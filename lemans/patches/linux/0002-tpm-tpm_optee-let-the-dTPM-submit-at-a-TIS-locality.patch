@@ -1,0 +1,190 @@
+From c765fdfc17db70d764c3bce790b65259d0400483 Mon Sep 17 00:00:00 2001
+From: Tyler Baker <tyler.baker@oss.qualcomm.com>
+Date: Sat, 7 Nov 2026 16:51:38 +0000
+Subject: [PATCH 1/3] tpm: tpm_optee: let the dTPM submit at a TIS locality
+
+The passthrough PTA takes a locality and refuses reserved ones, but the
+driver always sends at locality 0, so Linux cannot exercise that
+policy. Add a locality submit and a debugfs <tpm>/locality knob.
+
+Signed-off-by: Tyler Baker <tyler.baker@oss.qualcomm.com>
+---
+ drivers/char/tpm/tpm_optee.c      | 67 +++++++++++++++++++++++++++++++
+ drivers/char/tpm/tpm_optee.h      |  5 +++
+ drivers/char/tpm/tpm_optee_dtpm.c |  5 ++-
+ 3 files changed, 76 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/char/tpm/tpm_optee.c b/drivers/char/tpm/tpm_optee.c
+index e2223242327e7..50ef644217509 100644
+--- a/drivers/char/tpm/tpm_optee.c
++++ b/drivers/char/tpm/tpm_optee.c
+@@ -9,6 +9,7 @@
+  * ID) and binds the TA.
+  */
+ 
++#include <linux/debugfs.h>
+ #include <linux/module.h>
+ #include <linux/tee_drv.h>
+ #include <linux/tpm.h>
+@@ -20,12 +21,21 @@
+ #define TPM_OPTEE_MAX_COMMAND_SIZE	4096
+ #define TPM_OPTEE_MAX_RESPONSE_SIZE	4096
+ 
++/* GlobalPlatform TEE_ERROR_ACCESS_DENIED, as returned by the TA */
++#define TPM_OPTEE_ERROR_ACCESS_DENIED	0xffff0001
++
++/* Highest TIS locality */
++#define TPM_OPTEE_MAX_LOCALITY		4
++
+ struct tpm_optee_private {
+ 	struct tpm_chip *chip;
+ 	struct tee_context *ctx;
+ 	u32 session;
+ 	struct tee_shm *shm;
+ 	const struct tpm_optee_config *cfg;
++	/* TIS locality of the commands, set through debugfs; 0 by default */
++	u8 locality;
++	struct dentry *debugfs;
+ };
+ 
+ /* Validate the response header the TA wrote back, return its length or -EIO */
+@@ -64,6 +74,7 @@ static int tpm_optee_op_send(struct tpm_chip *chip, u8 *buf, size_t bufsiz,
+ 		.session = pvt_data->session,
+ 		.num_params = 4,
+ 	};
++	u8 locality = READ_ONCE(pvt_data->locality);
+ 	u8 *temp_buf;
+ 	int rc;
+ 
+@@ -100,8 +111,22 @@ static int tpm_optee_op_send(struct tpm_chip *chip, u8 *buf, size_t bufsiz,
+ 		},
+ 	};
+ 
++	/* value[2]: TIS locality, for any locality but the default one */
++	if (locality) {
++		transceive_args.func = pvt_data->cfg->loc_cmd_id;
++		command_params[2] = (struct tee_param) {
++			.attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT,
++			.u.value.a = locality,
++		};
++	}
++
+ 	rc = tee_client_invoke_func(pvt_data->ctx, &transceive_args,
+ 				    command_params);
++	if (!rc && transceive_args.ret == TPM_OPTEE_ERROR_ACCESS_DENIED) {
++		dev_err(&chip->dev, "locality %u refused by the TEE\n",
++			locality);
++		return -EACCES;
++	}
+ 	if (rc < 0 || transceive_args.ret != 0) {
+ 		dev_err(&chip->dev, "SUBMIT_COMMAND invoke error: 0x%x\n",
+ 			transceive_args.ret);
+@@ -160,6 +185,45 @@ static int tpm_optee_open_session(struct device *dev, struct tee_context *ctx,
+ 	return 0;
+ }
+ 
++static int tpm_optee_locality_get(void *data, u64 *val)
++{
++	struct tpm_optee_private *pvt_data = data;
++
++	*val = READ_ONCE(pvt_data->locality);
++
++	return 0;
++}
++
++/*
++ * Only the TEE decides which localities the normal world may use: any value
++ * in range is accepted here and a refused one fails the next command.
++ */
++static int tpm_optee_locality_set(void *data, u64 val)
++{
++	struct tpm_optee_private *pvt_data = data;
++
++	if (val > TPM_OPTEE_MAX_LOCALITY)
++		return -EINVAL;
++
++	WRITE_ONCE(pvt_data->locality, val);
++
++	return 0;
++}
++
++DEFINE_DEBUGFS_ATTRIBUTE(tpm_optee_locality_fops, tpm_optee_locality_get,
++			 tpm_optee_locality_set, "%llu\n");
++
++static void tpm_optee_debugfs_init(struct tpm_optee_private *pvt_data)
++{
++	if (!pvt_data->cfg->has_loc_cmd)
++		return;
++
++	pvt_data->debugfs = debugfs_create_dir(dev_name(&pvt_data->chip->dev),
++					       NULL);
++	debugfs_create_file_unsafe("locality", 0600, pvt_data->debugfs,
++				   pvt_data, &tpm_optee_locality_fops);
++}
++
+ int tpm_optee_probe(struct device *dev, const struct tpm_optee_config *cfg)
+ {
+ 	struct tpm_optee_private *pvt_data;
+@@ -211,6 +275,8 @@ int tpm_optee_probe(struct device *dev, const struct tpm_optee_config *cfg)
+ 		goto out_chip;
+ 	}
+ 
++	tpm_optee_debugfs_init(pvt_data);
++
+ 	return 0;
+ 
+ out_chip:
+@@ -230,6 +296,7 @@ void tpm_optee_remove(struct device *dev)
+ {
+ 	struct tpm_optee_private *pvt_data = dev_get_drvdata(dev);
+ 
++	debugfs_remove_recursive(pvt_data->debugfs);
+ 	tpm_chip_unregister(pvt_data->chip);
+ 	put_device(&pvt_data->chip->dev);
+ 	tee_shm_free(pvt_data->shm);
+diff --git a/drivers/char/tpm/tpm_optee.h b/drivers/char/tpm/tpm_optee.h
+index a3a2ea2a951de..1827f113336fe 100644
+--- a/drivers/char/tpm/tpm_optee.h
++++ b/drivers/char/tpm/tpm_optee.h
+@@ -18,11 +18,16 @@ struct device;
+  * @ta_uuid:	UUID of the trusted application to bind
+  * @login:	TEE_IOCTL_LOGIN_* client login used to open the session
+  * @cmd_id:	TA function ID that submits a TPM command
++ * @loc_cmd_id:	TA function ID that submits a TPM command at a TIS locality
++ *		(value parameter 2), valid if @has_loc_cmd
++ * @has_loc_cmd: the TA takes a locality; expose it in debugfs
+  */
+ struct tpm_optee_config {
+ 	uuid_t	ta_uuid;
+ 	u32	login;
+ 	u32	cmd_id;
++	u32	loc_cmd_id;
++	bool	has_loc_cmd;
+ };
+ 
+ int tpm_optee_probe(struct device *dev, const struct tpm_optee_config *cfg);
+diff --git a/drivers/char/tpm/tpm_optee_dtpm.c b/drivers/char/tpm/tpm_optee_dtpm.c
+index 28243e9f6734e..434a98f50a095 100644
+--- a/drivers/char/tpm/tpm_optee_dtpm.c
++++ b/drivers/char/tpm/tpm_optee_dtpm.c
+@@ -15,13 +15,16 @@
+ 
+ #include "tpm_optee.h"
+ 
+-#define TPM_OPTEE_DTPM_SUBMIT_COMMAND	0
++#define TPM_OPTEE_DTPM_SUBMIT_COMMAND		0
++#define TPM_OPTEE_DTPM_SUBMIT_COMMAND_LOCALITY	1
+ 
+ static const struct tpm_optee_config tpm_optee_dtpm_config = {
+ 	.ta_uuid = UUID_INIT(0x50568cd9, 0x370a, 0x46b8,
+ 			     0x9f, 0x2c, 0x6f, 0xd9, 0x06, 0x64, 0xd2, 0xee),
+ 	.login	 = TEE_IOCTL_LOGIN_REE_KERNEL,
+ 	.cmd_id	 = TPM_OPTEE_DTPM_SUBMIT_COMMAND,
++	.loc_cmd_id = TPM_OPTEE_DTPM_SUBMIT_COMMAND_LOCALITY,
++	.has_loc_cmd = true,
+ };
+ 
+ static int tpm_optee_dtpm_probe(struct tee_client_device *tee_device)
+-- 
+2.47.3
+
