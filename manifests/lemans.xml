@@ -24,5 +24,5 @@
   <!-- xtest from 962b322 (regression 1048) needs the stack protector PTA
        commands of a newer optee_os than features/lemans/drtm. -->
   <extend-project name="OP-TEE/optee_test.git" revision="e92a1880e74b45c5ff31b8d5b917ab2278f06760"/>
-  <project path="u-boot"               remote="qcl"   name="u-boot.git"               revision="3902cb4183e03ce6349b7c465123735ba6df34d9" upstream="qcom-next"/>
+  <project path="u-boot"               remote="ea"    name="u-boot.git"               revision="features/lemans/drtm"/>
 </manifest>
