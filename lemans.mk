@@ -12,8 +12,9 @@
 #                              (uefi partition image; a FIT despite the .elf name)
 #
 # Boot sequence: XBL → U-Boot SPL → TF-A BL31 → OP-TEE OS → U-Boot proper → Linux
-# (XEN=y, the default on this branch: ... → U-Boot proper → Xen → dom0 Linux,
-# with OP-TEE as the S-EL1 SPMC under the TF-A SPMD)
+# (XEN=y DRTM=y, the default on this branch: ... → U-Boot proper → DRTM
+# dynamic launch → Xen → dom0 Linux, with OP-TEE as the S-EL1 SPMC under the
+# TF-A SPMD; see the dlme target)
 # U-Boot SPL replaces TF-A BL2 as the first open-source stage.
 # TF-A BL31 (Secure Monitor) remains resident at EL3 after boot.
 # Signing uses qtestsign (open-source, local — no QTI CASS access required).
@@ -93,8 +94,12 @@ CFG_TEE_CORE_LOG_LEVEL := 2
 #           (Xen reaches OP-TEE through its FF-A mediator only), and the ESP
 #           boots Xen with dom0 (see the xen and xen-esp targets).
 #   DRTM=y  BL31 carries the Arm DRTM (DEN0113) service, the dynamic launch
-#           Xen is started through.
+#           Xen is started through: the ESP carries dlme.img (Xen and dom0),
+#           which U-Boot's default boot command launches.
 # XEN=n DRTM=n builds the plain OP-TEE boot of features/lemans/security/dtpm.
+# This branch's U-Boot boots only through the launch: a build without
+# dlme.img (XEN=n or DRTM=n) stops at its prompt; boot it with
+# 'run do_boot'.
 ################################################################################
 XEN  ?= y
 DRTM ?= y
@@ -858,6 +863,9 @@ uki: linux buildroot linux-firmware
 
 ifeq ($(XEN),y)
 	$(MAKE) xen-esp
+ifeq ($(DRTM),y)
+	$(MAKE) dlme
+endif
 endif
 
 uki-clean:
@@ -870,9 +878,10 @@ uki-clean:
 #            lemans/xen/xen.config, version suffix XEN_VENDORVERSION
 #            (default: LOCALVERSION, so the build fingerprint shows in Xen's
 #            banner)
-#   xen-esp  adds to efi.bin: EFI/BOOT/bootaa64.efi = xen.efi (so U-Boot's
-#            EFI boot starts Xen), bootaa64.cfg (Xen's EFI configuration)
-#            and the dom0 kernel Image, initramfs and DTB next to it.
+#   xen-esp  adds to efi.bin: EFI/BOOT/bootaa64.efi = xen.efi (so 'run
+#            do_boot', U-Boot's EFI boot, starts Xen statically),
+#            bootaa64.cfg (Xen's EFI configuration) and the dom0 kernel
+#            Image, initramfs and DTB next to it.
 #            EFI/Linux/uki.efi stays for a native boot.
 #
 # Xen's console is the GENI debug UART (dtuart=serial0); dom0's is hvc0.
@@ -911,6 +920,53 @@ xen-esp: xen
 	mcopy -o -i $(CURDIR)/lemans/output/efi.bin $(LINUX_PATH)/arch/arm64/boot/Image ::/EFI/BOOT/Image
 	mcopy -o -i $(CURDIR)/lemans/output/efi.bin $(BR_INITRAMFS) ::/EFI/BOOT/initrd
 	mcopy -o -i $(CURDIR)/lemans/output/efi.bin $(LINUX_DTB) ::/EFI/BOOT/lemans-evk.dtb
+
+################################################################################
+# DRTM DLME (XEN=y DRTM=y): dlme.img on the ESP
+#
+#   dlme  packs lemans/output/dlme.img with lemans/dlme/mkdlme.py: a 4 KiB
+#         trampoline (lemans/dlme/tramp.S), Xen's host device tree (the EVK
+#         memory banks, Xen's options, the dom0 kernel and initramfs as
+#         /chosen modules with the dom0 command line), Xen, the dom0 Image
+#         and the Buildroot initramfs, for the load address DLME_BASE; copies
+#         it to the root of efi.bin, and writes lemans/output/dlme-pcr.txt,
+#         the PCR 17/18/19 values a launch of it leaves (lemans/dlme/dlme-pcr.py).
+#
+# U-Boot's default boot command (qcom_lemans_defconfig) loads dlme.img from
+# the ESP to DLME_BASE and runs 'drtm launch' with a DLME_REGION_SIZE region
+# whose DLME data starts at DLME_DATA_OFF: keep these in step with its
+# environment. The image must end below DLME_DATA_OFF. BL31 measures the image
+# into PCR 18; Xen (CONFIG_ARM_DRTM, drtm-tpm=<the TPM's FF-A ID>) measures
+# the dom0 kernel, initramfs and command line into PCR 19 at locality 2.
+################################################################################
+DLME_IMG         = $(CURDIR)/lemans/output/dlme.img
+DLME_PCR         = $(CURDIR)/lemans/output/dlme-pcr.txt
+DLME_BASE        = 0x180000000
+DLME_REGION_SIZE = 0x10200000
+DLME_DATA_OFF    = 0x10000000
+XEN_DRTM_TPM    ?= 0x8100
+# The EVK's DDR banks for Xen (the set the M10 launch ran with). U-Boot
+# does not fix up the DLME's device tree, so another memory size needs
+# its own banks here.
+DLME_BANKS       = 0x80000000:0x3ee00000,0xc0000000:0xfd00000,0xd0000000:0x1900000,0xd3500000:0x2cb00000,0x100000000:0x300000000,0x900000000:0x180000000,0xa80000000:0x180000000,0xd00000000:0x254100000
+
+.PHONY: dlme
+
+dlme: xen
+	@test -f $(CURDIR)/lemans/output/efi.bin || { echo "dlme: no efi.bin, run 'make uki'"; exit 1; }
+	$(AARCH64_CROSS_COMPILE)gcc -nostdlib -ffreestanding -Wl,-Ttext=0 \
+		-Wl,--build-id=none -o $(XEN_BUILD)/dlme-tramp.elf $(CURDIR)/lemans/dlme/tramp.S
+	$(AARCH64_CROSS_COMPILE)objcopy -O binary $(XEN_BUILD)/dlme-tramp.elf $(XEN_BUILD)/dlme-tramp.bin
+	python3 $(CURDIR)/lemans/dlme/mkdlme.py $(DLME_IMG) $(XEN_BUILD)/dlme-tramp.bin \
+		$(LINUX_DTB) $(XEN_BUILD)/xen $(LINUX_PATH)/arch/arm64/boot/Image $(BR_INITRAMFS) \
+		$(DLME_BASE) '$(strip $(XEN_OPTIONS)) drtm-tpm=$(XEN_DRTM_TPM)' \
+		'$(strip $(XEN_DOM0_CMDLINE))' $(DLME_BANKS)
+	@test $$(stat -c %s $(DLME_IMG)) -le $$(($(DLME_DATA_OFF))) || \
+		{ echo "dlme.img does not end below DLME_DATA_OFF $(DLME_DATA_OFF)"; exit 1; }
+	python3 $(CURDIR)/lemans/dlme/dlme-pcr.py $(DLME_IMG) \
+		$(LINUX_PATH)/arch/arm64/boot/Image $(BR_INITRAMFS) '$(strip $(XEN_DOM0_CMDLINE))' > $(DLME_PCR)
+	mcopy -o -i $(CURDIR)/lemans/output/efi.bin $(DLME_IMG) ::/dlme.img
+	@cat $(DLME_PCR)
 
 ################################################################################
 # efi-kernel-only — Build an efi.bin that boots the full Yocto rootfs
