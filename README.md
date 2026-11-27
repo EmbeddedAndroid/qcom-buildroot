@@ -71,12 +71,15 @@ BusyBox initramfs).
 
 On Lemans, `XEN=y` also boots Xen: the kernel gets Xen dom0 support and the
 FF-A transport, the getty moves to `/dev/console` (hvc0 under Xen), `make
-xen` builds `xen.efi` from `XEN_PATH` with `lemans/xen/xen.config`, and `make
-uki` puts it on the ESP as `EFI/BOOT/bootaa64.efi` with its configuration
-(`bootaa64.cfg`), the kernel `Image`, the initramfs and the DTB, so U-Boot's
-EFI boot starts Xen and Xen starts dom0. The firmware must run OP-TEE as the
-FF-A SPMC (TF-A `SPD=spmd`, OP-TEE `CFG_CORE_SEL1_SPMC=y`): dom0 and the
-guests reach OP-TEE through Xen's FF-A mediator.
+xen` builds Xen from `XEN_PATH` with `lemans/xen/xen.config`, and `make uki`
+puts `xen.efi` on the ESP as `EFI/BOOT/bootaa64.efi` with its configuration
+(`bootaa64.cfg`), the kernel `Image`, the initramfs and the DTB. With
+`DRTM=y` (the default) it also packs `dlme.img` (Xen and dom0) on the ESP,
+which U-Boot's default boot command starts through the Arm DRTM dynamic
+launch; `run do_boot` starts `xen.efi` statically by hand.
+The firmware must run OP-TEE as the FF-A SPMC (TF-A `SPD=spmd`, OP-TEE
+`CFG_CORE_SEL1_SPMC=y`): dom0 and the guests reach OP-TEE through Xen's FF-A
+mediator.
 
 Building them needs, besides the usual host tools, a host `ffmpeg` with
 libx264, libx265 and libvpx (the video test streams). Proprietary SDKs are
